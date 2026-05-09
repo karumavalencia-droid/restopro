@@ -1,0 +1,2031 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="RestoPro"/>
+  <meta name="theme-color" content="#111827"/>
+  <title>RestoPro</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;padding:0;background:#F4F3F0;overscroll-behavior:none}
+    ::-webkit-scrollbar{display:none}
+    input,select,textarea,button{font-family:inherit}
+    textarea{resize:none}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useMemo, useEffect, useCallback } = React;
+
+// ── Shared UI ─────────────────────────────────────────────────
+const M={green:"#10B981",yellow:"#F59E0B",red:"#EF4444",blue:"#2563EB",
+  purple:"#7C3AED",gray:"#6B7280",bg:"#F4F3F0",card:"#fff",dark:"#111827"};
+
+function Card({children,style={}}){
+  return <div style={{background:"#fff",borderRadius:16,padding:18,
+    boxShadow:"0 1px 8px #0001",...style}}>{children}</div>;
+}
+function SectionTitle({emoji,label,color="#1A1A1A"}){
+  return <div style={{fontSize:15,fontWeight:900,marginBottom:14,color,
+    display:"flex",alignItems:"center",gap:8}}><span>{emoji}</span>{label}</div>;
+}
+function BarraProgreso({pct,color,h=7}){
+  return <div style={{background:"#F3F4F6",borderRadius:6,height:h,overflow:"hidden"}}>
+    <div style={{width:`${Math.min(pct,100)}%`,height:"100%",borderRadius:6,
+      background:color,transition:"width .4s"}}/>
+  </div>;
+}
+function MiniAvatar({nombre,color,size=32}){
+  return <div style={{width:size,height:size,borderRadius:"50%",flexShrink:0,
+    background:color+"28",border:`2px solid ${color}`,display:"flex",
+    alignItems:"center",justifyContent:"center",fontSize:size*.38,fontWeight:900,color}}>
+    {nombre[0]}</div>;
+}
+
+// ══════════════════════════════════════════════════════════════
+// 1. CAJA — registro diario de ventas
+// ══════════════════════════════════════════════════════════════
+function ModCaja(){
+  const [registros,setRegistros] = React.useState(()=>{
+    try{return JSON.parse(localStorage.getItem("rp_caja")||"[]")}catch(e){return []}
+  });
+  const [form,setForm] = React.useState({fecha:"",mediodia:"",noche:"",nota:""});
+
+  const guardar=()=>{
+    if(!form.fecha) return;
+    const n=[...registros,{...form,id:Date.now()}];
+    setRegistros(n); localStorage.setItem("rp_caja",JSON.stringify(n));
+    setForm({fecha:"",mediodia:"",noche:"",nota:""});
+  };
+  const eliminar=id=>{
+    const n=registros.filter(r=>r.id!==id);
+    setRegistros(n); localStorage.setItem("rp_caja",JSON.stringify(n));
+  };
+
+  const semana = registros.slice(-7).reduce((a,r)=>
+    a+(parseFloat(r.mediodia)||0)+(parseFloat(r.noche)||0),0);
+  const mes = registros.slice(-30).reduce((a,r)=>
+    a+(parseFloat(r.mediodia)||0)+(parseFloat(r.noche)||0),0);
+
+  return(
+    <div>
+      <Card style={{marginBottom:12,borderLeft:"4px solid #F59E0B"}}>
+        <SectionTitle emoji="📊" label="Caja diaria"/>
+        <div style={{display:"flex",gap:20,marginBottom:16}}>
+          {[{l:"ESTA SEMANA",v:semana,c:"#F59E0B"},{l:"ESTE MES",v:mes,c:"#10B981"}].map(k=>(
+            <div key={k.l}>
+              <div style={{fontSize:10,color:M.gray,fontWeight:700}}>{k.l}</div>
+              <div style={{fontSize:26,fontWeight:900,color:k.c}}>{k.v.toFixed(0)}€</div>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+          {[{l:"FECHA",k:"fecha",t:"date"},{l:"MEDIODÍA €",k:"mediodia",t:"number"},{l:"NOCHE €",k:"noche",t:"number"}].map(f=>(
+            <div key={f.k}>
+              <div style={{fontSize:10,fontWeight:700,color:M.gray,marginBottom:4}}>{f.l}</div>
+              <input type={f.t} value={form[f.k]} onChange={e=>setForm(p=>({...p,[f.k]:e.target.value}))}
+                style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",
+                  fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <input value={form.nota} placeholder="Nota..." onChange={e=>setForm(p=>({...p,nota:e.target.value}))}
+            style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1.5px solid #E5E7EB",
+              fontSize:13,outline:"none"}}/>
+          <button onClick={guardar} style={{padding:"8px 20px",borderRadius:8,border:"none",
+            background:"#F59E0B",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:14}}>+ Añadir</button>
+        </div>
+      </Card>
+
+      {registros.length>0&&(
+        <Card>
+          <SectionTitle emoji="📅" label="Registros"/>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {[...registros].reverse().slice(0,14).map(r=>{
+              const tot=(parseFloat(r.mediodia)||0)+(parseFloat(r.noche)||0);
+              return(
+                <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,
+                  padding:"10px 14px",background:"#FFFBEB",borderRadius:10}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:13}}>{r.fecha}</div>
+                    <div style={{fontSize:11,color:M.gray}}>
+                      🌮 {r.mediodia||0}€ · 🌙 {r.noche||0}€
+                      {r.nota&&<span style={{fontStyle:"italic"}}> · {r.nota}</span>}
+                    </div>
+                  </div>
+                  <div style={{fontWeight:900,fontSize:16,color:"#F59E0B"}}>{tot.toFixed(0)}€</div>
+                  <button onClick={()=>eliminar(r.id)} style={{background:"#FEF2F2",border:"none",
+                    borderRadius:6,padding:"4px 8px",cursor:"pointer",color:M.red,fontSize:12}}>🗑</button>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 2. CONTACTOS — teléfonos con llamada y WhatsApp directo
+// ══════════════════════════════════════════════════════════════
+function ModContactos({salonEmps,cocinaEmps,setSalonEmps,setCocinaEmps}){
+  const [editId,setEditId]=React.useState(null);
+  const [tel,setTel]=React.useState("");
+
+  const todos=[...salonEmps.map(e=>({...e,area:"salon"})),...cocinaEmps.map(e=>({...e,area:"cocina"}))];
+
+  const guardar=()=>{
+    setSalonEmps(p=>p.map(e=>e.id===editId?{...e,tel}:e));
+    setCocinaEmps(p=>p.map(e=>e.id===editId?{...e,tel}:e));
+    setEditId(null); setTel("");
+  };
+
+  return(
+    <div>
+      <Card>
+        <SectionTitle emoji="📱" label="Contactos del equipo"/>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {todos.map(emp=>{
+            const color=emp.area==="cocina"?"#DC2626":"#2563EB";
+            return(
+              <div key={emp.id} style={{display:"flex",alignItems:"center",gap:12,
+                padding:"10px 14px",border:"1px solid #F3F4F6",borderRadius:12}}>
+                <MiniAvatar nombre={emp.nombre} color={color} size={38}/>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:800,fontSize:14}}>{emp.nombre}</div>
+                  {editId===emp.id?(
+                    <div style={{display:"flex",gap:6,marginTop:4}}>
+                      <input value={tel} onChange={e=>setTel(e.target.value)}
+                        placeholder="6XX XXX XXX" autoFocus
+                        style={{flex:1,padding:"5px 8px",borderRadius:7,border:"1.5px solid #E5E7EB",
+                          fontSize:12,outline:"none"}}/>
+                      <button onClick={guardar} style={{padding:"5px 12px",borderRadius:7,border:"none",
+                        background:"#10B981",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12}}>✓</button>
+                      <button onClick={()=>setEditId(null)} style={{padding:"5px 10px",borderRadius:7,
+                        border:"none",background:"#F3F4F6",color:M.gray,cursor:"pointer",fontSize:12}}>✕</button>
+                    </div>
+                  ):(
+                    <div style={{fontSize:12,color:emp.tel?M.gray:"#D1D5DB"}}>
+                      {emp.tel||"Sin teléfono — toca ✎ para añadir"}
+                    </div>
+                  )}
+                </div>
+                {editId!==emp.id&&(
+                  <div style={{display:"flex",gap:6}}>
+                    {emp.tel&&<a href={"tel:"+emp.tel} style={{padding:"7px 10px",borderRadius:8,
+                      background:"#DCFCE7",color:"#10B981",textDecoration:"none",fontSize:14}}>📞</a>}
+                    {emp.tel&&<a href={"https://wa.me/34"+emp.tel.replace(/\D/g,"")}
+                      target="_blank" rel="noreferrer"
+                      style={{padding:"7px 10px",borderRadius:8,
+                        background:"#DCFCE7",color:"#10B981",textDecoration:"none",fontSize:14}}>💬</a>}
+                    <button onClick={()=>{setEditId(emp.id);setTel(emp.tel||"");}}
+                      style={{padding:"7px 10px",borderRadius:8,background:"#F3F4F6",
+                        border:"none",cursor:"pointer",color:M.gray,fontSize:14}}>✎</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 3. SOLICITUDES — vacaciones / cambio turno / baja
+// ══════════════════════════════════════════════════════════════
+function ModSolicitudes({salonEmps,cocinaEmps}){
+  const [sols,setSols]=React.useState(()=>{
+    try{return JSON.parse(localStorage.getItem("rp_sols")||"[]")}catch(e){return []}
+  });
+  const [form,setForm]=React.useState({empId:"",tipo:"vacaciones",fecha:"",nota:""});
+
+  const todos=[...salonEmps.map(e=>({...e,area:"salon"})),...cocinaEmps.map(e=>({...e,area:"cocina"}))];
+
+  const guardar=()=>{
+    if(!form.empId||!form.fecha) return;
+    const n=[...sols,{...form,id:Date.now(),estado:"pendiente"}];
+    setSols(n); localStorage.setItem("rp_sols",JSON.stringify(n));
+    setForm({empId:"",tipo:"vacaciones",fecha:"",nota:""});
+  };
+  const cambiar=(id,estado)=>{
+    const n=sols.map(s=>s.id===id?{...s,estado}:s);
+    setSols(n); localStorage.setItem("rp_sols",JSON.stringify(n));
+  };
+  const eliminar=id=>{
+    const n=sols.filter(s=>s.id!==id);
+    setSols(n); localStorage.setItem("rp_sols",JSON.stringify(n));
+  };
+
+  const TIPOS={vacaciones:"🏖 Vacaciones","cambio_turno":"🔄 Cambio turno",
+    dia_libre:"🌴 Día libre",baja:"🤒 Baja"};
+  const EC={pendiente:{c:"#F59E0B",l:"⏳ Pendiente"},
+    aprobada:{c:"#10B981",l:"✅ Aprobada"},rechazada:{c:"#EF4444",l:"❌ Rechazada"}};
+  const pendientes=sols.filter(s=>s.estado==="pendiente").length;
+
+  return(
+    <div>
+      <Card style={{marginBottom:12}}>
+        <SectionTitle emoji="📋" label="Nueva solicitud"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:M.gray,marginBottom:4}}>EMPLEADO</div>
+            <select value={form.empId} onChange={e=>setForm(p=>({...p,empId:e.target.value}))}
+              style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",
+                fontSize:13,outline:"none",background:"#fff"}}>
+              <option value="">Seleccionar...</option>
+              {todos.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:M.gray,marginBottom:4}}>TIPO</div>
+            <select value={form.tipo} onChange={e=>setForm(p=>({...p,tipo:e.target.value}))}
+              style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",
+                fontSize:13,outline:"none",background:"#fff"}}>
+              {Object.entries(TIPOS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{marginBottom:8}}>
+          <div style={{fontSize:10,fontWeight:700,color:M.gray,marginBottom:4}}>FECHA</div>
+          <input type="date" value={form.fecha} onChange={e=>setForm(p=>({...p,fecha:e.target.value}))}
+            style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",
+              fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+        </div>
+        <input value={form.nota} placeholder="Nota adicional..."
+          onChange={e=>setForm(p=>({...p,nota:e.target.value}))}
+          style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #E5E7EB",
+            fontSize:13,outline:"none",marginBottom:10}}/>
+        <button onClick={guardar} style={{width:"100%",padding:11,borderRadius:10,border:"none",
+          background:"#7C3AED",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:14}}>
+          Enviar solicitud
+        </button>
+      </Card>
+
+      {pendientes>0&&<div style={{background:"#FEF9C3",borderRadius:12,padding:"10px 16px",
+        marginBottom:12,fontSize:13,fontWeight:700,color:"#92400E"}}>
+        ⏳ {pendientes} solicitud{pendientes>1?"es":""} pendiente{pendientes>1?"s":""} de aprobar
+      </div>}
+
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {[...sols].reverse().map(s=>{
+          const emp=todos.find(e=>String(e.id)===String(s.empId));
+          const ec=EC[s.estado];
+          return(
+            <Card key={s.id} style={{borderLeft:`3px solid ${ec.c}`}}>
+              <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:800,fontSize:14}}>{emp?.nombre||"?"}</div>
+                  <div style={{fontSize:12,color:M.gray,marginTop:2}}>
+                    {TIPOS[s.tipo]} · {s.fecha}
+                  </div>
+                  {s.nota&&<div style={{fontSize:11,color:M.gray,marginTop:2,fontStyle:"italic"}}>{s.nota}</div>}
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:11,fontWeight:800,color:ec.c,marginBottom:6}}>{ec.l}</div>
+                  {s.estado==="pendiente"&&(
+                    <div style={{display:"flex",gap:5}}>
+                      <button onClick={()=>cambiar(s.id,"aprobada")} style={{padding:"5px 10px",
+                        borderRadius:7,border:"none",cursor:"pointer",background:"#DCFCE7",
+                        color:"#10B981",fontWeight:700,fontSize:11}}>✓</button>
+                      <button onClick={()=>cambiar(s.id,"rechazada")} style={{padding:"5px 10px",
+                        borderRadius:7,border:"none",cursor:"pointer",background:"#FEF2F2",
+                        color:M.red,fontWeight:700,fontSize:11}}>✕</button>
+                    </div>
+                  )}
+                </div>
+                <button onClick={()=>eliminar(s.id)} style={{background:"transparent",border:"none",
+                  cursor:"pointer",color:"#D1D5DB",fontSize:13}}>✕</button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 4. PUNTUALIDAD — llegadas tardías
+// ══════════════════════════════════════════════════════════════
+function ModPuntualidad({salonEmps,cocinaEmps}){
+  const [regs,setRegs]=React.useState(()=>{
+    try{return JSON.parse(localStorage.getItem("rp_punt")||"[]")}catch(e){return []}
+  });
+  const [form,setForm]=React.useState({empId:"",fecha:"",turno:"mediodia",minutos:"",nota:""});
+
+  const todos=[...salonEmps.map(e=>({...e,area:"salon"})),...cocinaEmps.map(e=>({...e,area:"cocina"}))];
+
+  const guardar=()=>{
+    if(!form.empId||!form.fecha) return;
+    const n=[...regs,{...form,id:Date.now()}];
+    setRegs(n); localStorage.setItem("rp_punt",JSON.stringify(n));
+    setForm({empId:"",fecha:"",turno:"mediodia",minutos:"",nota:""});
+  };
+  const eliminar=id=>{
+    const n=regs.filter(r=>r.id!==id);
+    setRegs(n); localStorage.setItem("rp_punt",JSON.stringify(n));
+  };
+
+  // Stats por empleado
+  const stats=todos.map(emp=>{
+    const r=regs.filter(x=>String(x.empId)===String(emp.id));
+    const tard=r.filter(x=>parseInt(x.minutos||0)>0);
+    const avg=tard.length?tard.reduce((a,x)=>a+parseInt(x.minutos||0),0)/tard.length:0;
+    return {...emp,total:r.length,tardanzas:tard.length,avg:+avg.toFixed(0)};
+  }).filter(e=>e.total>0).sort((a,b)=>b.tardanzas-a.tardanzas);
+
+  return(
+    <div>
+      <Card style={{marginBottom:12}}>
+        <SectionTitle emoji="⏰" label="Registrar puntualidad"/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:M.gray,marginBottom:4}}>EMPLEADO</div>
+            <select value={form.empId} onChange={e=>setForm(p=>({...p,empId:e.target.value}))}
+              style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",
+                fontSize:12,outline:"none",background:"#fff"}}>
+              <option value="">Seleccionar...</option>
+              {todos.map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:M.gray,marginBottom:4}}>FECHA</div>
+            <input type="date" value={form.fecha} onChange={e=>setForm(p=>({...p,fecha:e.target.value}))}
+              style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",
+                fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:M.gray,marginBottom:4}}>TURNO</div>
+            <select value={form.turno} onChange={e=>setForm(p=>({...p,turno:e.target.value}))}
+              style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",
+                fontSize:12,outline:"none",background:"#fff"}}>
+              <option value="mediodia">🌮 Mediodía</option>
+              <option value="noche">🌙 Noche</option>
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:M.gray,marginBottom:4}}>MIN TARDE (0=puntual)</div>
+            <input type="number" min="0" value={form.minutos} placeholder="0"
+              onChange={e=>setForm(p=>({...p,minutos:e.target.value}))}
+              style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",
+                fontSize:12,outline:"none",boxSizing:"border-box"}}/>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <input value={form.nota} placeholder="Nota (motivo, incidencia...)"
+            onChange={e=>setForm(p=>({...p,nota:e.target.value}))}
+            style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1.5px solid #E5E7EB",
+              fontSize:12,outline:"none"}}/>
+          <button onClick={guardar} style={{padding:"8px 18px",borderRadius:8,border:"none",
+            background:"#F59E0B",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:13}}>+ Añadir</button>
+        </div>
+      </Card>
+
+      {stats.length>0&&(
+        <Card style={{marginBottom:12}}>
+          <SectionTitle emoji="📈" label="Ranking puntualidad"/>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {stats.map(emp=>{
+              const c=emp.tardanzas===0?"#10B981":emp.tardanzas<=2?"#F59E0B":"#EF4444";
+              const pct=Math.max(0,100-emp.tardanzas*20);
+              const color=emp.area==="cocina"?"#DC2626":"#2563EB";
+              return(
+                <div key={emp.id}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}>
+                    <MiniAvatar nombre={emp.nombre} color={color} size={28}/>
+                    <span style={{fontWeight:700,flex:1,fontSize:13}}>{emp.nombre}</span>
+                    <span style={{fontSize:11,color:M.gray}}>{emp.tardanzas} tarde{emp.tardanzas!==1?"s":""}</span>
+                    <span style={{fontWeight:800,color:c,fontSize:12}}>
+                      {emp.tardanzas===0?"✓ Perfecto":emp.avg>0?`~${emp.avg}min`:""}
+                    </span>
+                  </div>
+                  <BarraProgreso pct={pct} color={c}/>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {regs.length>0&&(
+        <Card>
+          <SectionTitle emoji="📋" label="Historial"/>
+          <div style={{display:"flex",flexDirection:"column",gap:7}}>
+            {[...regs].reverse().slice(0,15).map(r=>{
+              const emp=todos.find(e=>String(e.id)===String(r.empId));
+              const mins=parseInt(r.minutos||0);
+              return(
+                <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,
+                  padding:"8px 12px",borderRadius:10,
+                  background:mins===0?"#F0FDF4":"#FFFBEB"}}>
+                  <div style={{flex:1}}>
+                    <span style={{fontWeight:700,fontSize:13}}>{emp?.nombre}</span>
+                    <span style={{fontSize:11,color:M.gray,marginLeft:8}}>
+                      {r.fecha} · {r.turno==="mediodia"?"🌮":"🌙"}
+                    </span>
+                    {r.nota&&<div style={{fontSize:10,color:M.gray,fontStyle:"italic"}}>{r.nota}</div>}
+                  </div>
+                  <span style={{fontWeight:800,fontSize:13,
+                    color:mins===0?"#10B981":"#EF4444"}}>
+                    {mins===0?"Puntual":"+"+mins+"min"}
+                  </span>
+                  <button onClick={()=>eliminar(r.id)} style={{background:"transparent",border:"none",
+                    cursor:"pointer",color:"#D1D5DB",fontSize:12}}>✕</button>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 5. TAREAS — checklist apertura y cierre
+// ══════════════════════════════════════════════════════════════
+const TAREAS_BASE={
+  apertura:["Encender equipos cocina","Revisar temperaturas cámara",
+    "Preparar mise en place","Revisar reservas del día",
+    "Limpiar barra y mesas","Revisar stock básico"],
+  cierre:["Limpiar y desinfectar cocina","Apagar equipos",
+    "Guardar alimentos correctamente","Cuadrar caja",
+    "Revisar seguridad (gas, luces)","Informe incidencias"],
+};
+
+function ModTareas(){
+  const [tareas,setTareas]=React.useState(()=>{
+    try{return JSON.parse(localStorage.getItem("rp_tareas")||JSON.stringify(TAREAS_BASE))}
+    catch(e){return TAREAS_BASE}
+  });
+  const [checks,setChecks]=React.useState(()=>{
+    const hoy=new Date().toDateString();
+    try{
+      const s=JSON.parse(localStorage.getItem("rp_checks")||"{}");
+      return s.fecha===hoy?s.data:{};
+    }catch(e){return {}}
+  });
+  const [nueva,setNueva]=React.useState({tipo:"apertura",texto:""});
+
+  const toggle=(tipo,i)=>{
+    const k=`${tipo}-${i}`;
+    const n={...checks,[k]:!checks[k]};
+    setChecks(n);
+    localStorage.setItem("rp_checks",JSON.stringify({fecha:new Date().toDateString(),data:n}));
+  };
+
+  const añadir=()=>{
+    if(!nueva.texto.trim()) return;
+    const n={...tareas,[nueva.tipo]:[...tareas[nueva.tipo],nueva.texto]};
+    setTareas(n); localStorage.setItem("rp_tareas",JSON.stringify(n));
+    setNueva(p=>({...p,texto:""}));
+  };
+
+  const eliminarTarea=(tipo,i)=>{
+    const n={...tareas,[tipo]:tareas[tipo].filter((_,idx)=>idx!==i)};
+    setTareas(n); localStorage.setItem("rp_tareas",JSON.stringify(n));
+    // reset checks for this index
+    const nc={...checks};
+    delete nc[`${tipo}-${i}`];
+    setChecks(nc);
+    localStorage.setItem("rp_checks",JSON.stringify({fecha:new Date().toDateString(),data:nc}));
+  };
+
+  return(
+    <div>
+      {["apertura","cierre"].map(tipo=>{
+        const c=tipo==="apertura"?"#F59E0B":"#818CF8";
+        const done=tareas[tipo].filter((_,i)=>checks[`${tipo}-${i}`]).length;
+        const pct=tareas[tipo].length>0?(done/tareas[tipo].length)*100:0;
+        return(
+          <Card key={tipo} style={{marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+              <span style={{fontSize:22}}>{tipo==="apertura"?"🌅":"🌙"}</span>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:900,fontSize:15,color:c}}>
+                  {tipo==="apertura"?"Apertura":"Cierre"}
+                </div>
+                <div style={{fontSize:11,color:M.gray}}>{done}/{tareas[tipo].length} completadas</div>
+              </div>
+              <div style={{fontWeight:900,fontSize:18,color:pct===100?"#10B981":c}}>
+                {pct.toFixed(0)}%
+              </div>
+            </div>
+            <BarraProgreso pct={pct} color={pct===100?"#10B981":c} h={6}/>
+            <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:6}}>
+              {tareas[tipo].map((t,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div onClick={()=>toggle(tipo,i)} style={{flex:1,display:"flex",
+                    alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,
+                    cursor:"pointer",background:checks[`${tipo}-${i}`]?"#F0FDF4":"#F9F8F6",
+                    transition:"background .15s"}}>
+                    <div style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${c}`,
+                      background:checks[`${tipo}-${i}`]?c:"transparent",flexShrink:0,
+                      display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}>
+                      {checks[`${tipo}-${i}`]&&<span style={{color:"#fff",fontSize:11,fontWeight:900}}>✓</span>}
+                    </div>
+                    <span style={{fontSize:13,textDecoration:checks[`${tipo}-${i}`]?"line-through":"none",
+                      color:checks[`${tipo}-${i}`]?M.gray:"#1A1A1A"}}>{t}</span>
+                  </div>
+                  <button onClick={()=>eliminarTarea(tipo,i)} style={{background:"transparent",
+                    border:"none",cursor:"pointer",color:"#E5E7EB",fontSize:13}}>✕</button>
+                </div>
+              ))}
+            </div>
+          </Card>
+        );
+      })}
+
+      <Card>
+        <SectionTitle emoji="➕" label="Añadir tarea"/>
+        <div style={{display:"flex",gap:6,marginBottom:10}}>
+          {["apertura","cierre"].map(t=>(
+            <button key={t} onClick={()=>setNueva(p=>({...p,tipo:t}))} style={{
+              flex:1,padding:"7px",borderRadius:8,border:"none",cursor:"pointer",fontWeight:700,fontSize:12,
+              background:nueva.tipo===t?"#111827":"#F3F4F6",color:nueva.tipo===t?"#fff":M.gray}}>
+              {t==="apertura"?"🌅 Apertura":"🌙 Cierre"}
+            </button>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <input value={nueva.texto} placeholder="Nueva tarea..."
+            onChange={e=>setNueva(p=>({...p,texto:e.target.value}))}
+            onKeyDown={e=>e.key==="Enter"&&añadir()}
+            style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1.5px solid #E5E7EB",
+              fontSize:13,outline:"none"}}/>
+          <button onClick={añadir} style={{padding:"8px 18px",borderRadius:8,border:"none",
+            background:"#111827",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:14}}>+</button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// 6. PROVEEDORES
+// ══════════════════════════════════════════════════════════════
+function ModProveedores(){
+  const [provs,setProvs]=React.useState(()=>{
+    try{return JSON.parse(localStorage.getItem("rp_provs")||"[]")}catch(e){return []}
+  });
+  const [form,setForm]=React.useState({nombre:"",producto:"",tel:"",diaPedido:"",minimo:"",nota:""});
+  const [showForm,setShowForm]=React.useState(false);
+  const [editId,setEditId]=React.useState(null);
+
+  const guardar=()=>{
+    if(!form.nombre.trim()) return;
+    let n;
+    if(editId){n=provs.map(p=>p.id===editId?{...form,id:editId}:p);}
+    else{n=[...provs,{...form,id:Date.now()}];}
+    setProvs(n); localStorage.setItem("rp_provs",JSON.stringify(n));
+    setForm({nombre:"",producto:"",tel:"",diaPedido:"",minimo:"",nota:""});
+    setShowForm(false); setEditId(null);
+  };
+
+  const editar=p=>{setForm(p);setEditId(p.id);setShowForm(true);};
+  const eliminar=id=>{
+    const n=provs.filter(p=>p.id!==id);
+    setProvs(n); localStorage.setItem("rp_provs",JSON.stringify(n));
+  };
+
+  const CAMPOS=[
+    {l:"PROVEEDOR *",k:"nombre",ph:"Nombre empresa",full:true},
+    {l:"PRODUCTO",k:"producto",ph:"Ej: Pescado, Verduras..."},
+    {l:"TELÉFONO",k:"tel",ph:"6XX XXX XXX"},
+    {l:"DÍA DE PEDIDO",k:"diaPedido",ph:"Ej: Lunes y jueves"},
+    {l:"PEDIDO MÍNIMO",k:"minimo",ph:"Ej: 50€"},
+    {l:"NOTA",k:"nota",ph:"Observaciones...",full:true},
+  ];
+
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:18,fontWeight:900}}>📦 Proveedores</div>
+        <button onClick={()=>{setShowForm(!showForm);setEditId(null);
+          setForm({nombre:"",producto:"",tel:"",diaPedido:"",minimo:"",nota:""});}}
+          style={{padding:"8px 16px",borderRadius:16,border:"none",background:"#111827",
+            color:"#fff",fontWeight:800,cursor:"pointer",fontSize:13}}>
+          {showForm?"✕ Cerrar":"+ Añadir"}
+        </button>
+      </div>
+
+      {showForm&&(
+        <Card style={{marginBottom:12}}>
+          <SectionTitle emoji={editId?"✎":"➕"} label={editId?"Editar proveedor":"Nuevo proveedor"}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+            {CAMPOS.map(f=>(
+              <div key={f.k} style={{gridColumn:f.full?"1/-1":undefined}}>
+                <div style={{fontSize:10,fontWeight:700,color:M.gray,marginBottom:4}}>{f.l}</div>
+                <input value={form[f.k]} placeholder={f.ph}
+                  onChange={e=>setForm(p=>({...p,[f.k]:e.target.value}))}
+                  style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",
+                    fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{setShowForm(false);setEditId(null);}} style={{flex:1,padding:10,
+              borderRadius:10,border:"1.5px solid #E5E7EB",background:"#fff",color:M.gray,
+              fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+            <button onClick={guardar} style={{flex:2,padding:10,borderRadius:10,border:"none",
+              background:"#0891B2",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:14}}>
+              {editId?"Guardar cambios":"Añadir proveedor"}
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {provs.length===0&&!showForm&&(
+        <Card>
+          <div style={{textAlign:"center",padding:32,color:M.gray,fontSize:13}}>
+            No hay proveedores. Toca + Añadir para empezar.
+          </div>
+        </Card>
+      )}
+
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {provs.map(p=>(
+          <Card key={p.id} style={{borderLeft:"3px solid #0891B2"}}>
+            <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:900,fontSize:15,color:"#0891B2"}}>{p.nombre}</div>
+                {p.producto&&<div style={{fontSize:12,color:"#374151",marginTop:3}}>📦 {p.producto}</div>}
+                {p.diaPedido&&<div style={{fontSize:12,color:M.gray,marginTop:2}}>📅 Pedido: {p.diaPedido}</div>}
+                {p.minimo&&<div style={{fontSize:12,color:M.gray}}>💰 Mínimo: {p.minimo}</div>}
+                {p.nota&&<div style={{fontSize:11,color:M.gray,fontStyle:"italic",marginTop:2}}>{p.nota}</div>}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
+                {p.tel&&<a href={"tel:"+p.tel} style={{padding:"7px 12px",borderRadius:8,
+                  background:"#DCFCE7",color:"#10B981",textDecoration:"none",fontSize:14,
+                  fontWeight:700}}>📞 Llamar</a>}
+                <div style={{display:"flex",gap:5}}>
+                  <button onClick={()=>editar(p)} style={{padding:"6px 10px",borderRadius:8,
+                    background:"#F3F4F6",border:"none",cursor:"pointer",color:M.gray,fontSize:13}}>✎</button>
+                  <button onClick={()=>eliminar(p.id)} style={{padding:"6px 10px",borderRadius:8,
+                    background:"#FEF2F2",border:"none",cursor:"pointer",color:M.red,fontSize:13}}>🗑</button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+const EXTRA_TABS=[
+  {id:"caja",        emoji:"📊", label:"Caja"},
+  {id:"contactos",   emoji:"📱", label:"Contactos"},
+  {id:"solicitudes", emoji:"📋", label:"Solicitudes"},
+  {id:"puntualidad", emoji:"⏰", label:"Puntualidad"},
+  {id:"tareas",      emoji:"✅", label:"Tareas"},
+  {id:"proveedores", emoji:"📦", label:"Proveedores"},
+];
+
+const { useState, useMemo, useEffect, useCallback } = React;
+
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTES
+// ═══════════════════════════════════════════════════════════════
+const DIAS      = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+const DIAS_FULL = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+
+const SERVICIOS = [
+  { id:"mediodia", label:"Mediodía", rango:"11:30–16:30", color:"#F59E0B", emoji:"🌮" },
+  { id:"noche",    label:"Noche",    rango:"19:30–23:30", color:"#818CF8", emoji:"🌙" },
+];
+
+const TURNOS_RAPIDOS = {
+  mediodia:[
+    { entrada:"11:30", salida:"15:30" },
+    { entrada:"11:30", salida:"16:00" },
+    { entrada:"11:30", salida:"16:30" },
+    { entrada:"13:00", salida:"16:30" },
+  ],
+  noche:[
+    { entrada:"19:30", salida:"23:30" },
+    { entrada:"20:00", salida:"23:30" },
+    { entrada:"19:30", salida:"23:00" },
+  ],
+};
+
+const HORAS_SELECT = [
+  "11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30",
+  "15:00","15:30","16:00","16:30","17:00",
+  "19:00","19:30","20:00","20:30","21:00","21:30",
+  "22:00","22:30","23:00","23:30","00:00",
+];
+
+const PUESTOS_COCINA = [
+  { id:"maki",       label:"Maki",       emoji:"🍣", color:"#0891B2" },
+  { id:"nigiri",     label:"Nigiri",     emoji:"🍱", color:"#7C3AED" },
+  { id:"fritura",    label:"Fritura",    emoji:"🍤", color:"#D97706" },
+  { id:"wok",        label:"Wok",        emoji:"🥢", color:"#EA580C" },
+  { id:"parrilla",   label:"Parrilla",   emoji:"🔥", color:"#DC2626" },
+  { id:"fregaplatos",label:"Fregaplatos",emoji:"🧼", color:"#64748B" },
+];
+
+const AREA_COLOR = { salon:"#2563EB", cocina:"#DC2626" };
+const SALON_COLOR = { Mesero:"#2563EB", Gerente:"#7C3AED", Cajero:"#0891B2", Hostess:"#DB2777", Barman:"#92400E" };
+
+const CONTRATO_SALON  = { totalH: 4*6.5+2*7 };  // 40h
+const CONTRATO_COCINA = { totalH: 5*8 };          // 40h
+const contratoHrs = tipo => tipo==="cocina" ? CONTRATO_COCINA.totalH : CONTRATO_SALON.totalH;
+
+// ─── Tiempo ───────────────────────────────────────────────────
+const toMin = t => { const [h,m]=t.split(":").map(Number); return h*60+m; };
+const calcHrs = (entrada, salida, servId) => {
+  let mins = toMin(salida)-toMin(entrada);
+  if (mins<0) mins+=1440;
+  if (servId==="mediodia") {
+    const overlap = Math.min(toMin(salida),toMin("12:30"))-Math.max(toMin(entrada),toMin("12:00"));
+    if (overlap>0) mins-=overlap;
+  }
+  return +(mins/60).toFixed(1);
+};
+
+const pColor = id => id==="comodin"?"#10B981":PUESTOS_COCINA.find(x=>x.id===id)?.color||"#64748B";
+const pLabelFull = id => id==="comodin"?"Comodín 🃏":PUESTOS_COCINA.find(x=>x.id===id)?.label||id;
+const pEmoji = id => id==="comodin"?"🃏":PUESTOS_COCINA.find(x=>x.id===id)?.emoji||"";
+const pLabel = id => id==="comodin"?"Comodín":PUESTOS_COCINA.find(x=>x.id===id)?.label||id;
+
+// ═══════════════════════════════════════════════════════════════
+// DATOS
+// ═══════════════════════════════════════════════════════════════
+const SALON_EMP_INIT = [
+  { id:1, nombre:"Isabel",  puesto:"Mesero", contrato:"salon", disponible:[0,2,3,4,5,6] },
+  { id:2, nombre:"Vanessa", puesto:"Mesero", contrato:"salon", disponible:[1,2,3,4,5,6] },
+  { id:3, nombre:"Edu",     puesto:"Mesero", contrato:"salon", disponible:[0,1,2,4,5,6] },
+  { id:4, nombre:"Felipe",  puesto:"Mesero", contrato:"salon", disponible:[0,1,3,4,5,6] },
+];
+
+const COCINA_EMP_INIT = [
+  { id:101, nombre:"Hosca",     contrato:"cocina", puestoPrincipal:"nigiri",      puestosExtra:["maki"],             disponible:[0,1,2,4,5,6] },
+  { id:102, nombre:"Sebastián", contrato:"cocina", puestoPrincipal:"fritura",     puestosExtra:["maki"],             disponible:[1,2,4,5,6] },
+  { id:103, nombre:"Jeferson",  contrato:"cocina", puestoPrincipal:"comodin",     puestosExtra:["maki","nigiri","fritura","parrilla"],   disponible:[1,2,3,4,5] },
+  { id:104, nombre:"Newton",    contrato:"cocina", puestoPrincipal:"maki",        puestosExtra:["fritura"],          disponible:[0,2,3,5,6] },
+  { id:105, nombre:"Junfen",    contrato:"cocina", puestoPrincipal:"wok",         puestosExtra:[],                  disponible:[0,1,2,3,4,5] },
+  { id:106, nombre:"Mauricio",  contrato:"cocina", puestoPrincipal:"parrilla",    puestosExtra:[],                  disponible:[0,1,3,4,6] },
+  { id:107, nombre:"Karina",    contrato:"salon",  puestoPrincipal:"fregaplatos", puestosExtra:[],                  disponible:[0,1,3,4,5,6] },
+];
+
+const buildSalonHor = () => {
+  const h = {
+    0: { 1:{mediodia:{entrada:"11:30",salida:"15:30"},noche:{entrada:"19:30",salida:"22:30"}}, 3:{mediodia:{entrada:"13:00",salida:"16:30"},noche:{entrada:"20:30",salida:"23:30"}}, 4:{mediodia:{entrada:"12:30",salida:"15:30"},noche:{entrada:"20:00",salida:"23:30"}} },
+    1: { 2:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:00",salida:"00:00"}}, 3:{mediodia:{entrada:"13:00",salida:"16:30"},noche:{entrada:"20:30",salida:"23:30"}}, 4:{mediodia:{entrada:"12:30",salida:"15:30"},noche:{entrada:"20:00",salida:"23:30"}} },
+    2: { 1:{mediodia:{entrada:"11:30",salida:"15:30"},noche:{entrada:"19:30",salida:"22:30"}}, 2:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:00",salida:"00:00"}}, 3:{mediodia:{entrada:"13:00",salida:"16:30"},noche:{entrada:"20:30",salida:"23:30"}} },
+    3: { 1:{mediodia:{entrada:"11:30",salida:"15:30"},noche:{entrada:"19:30",salida:"22:30"}}, 2:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:00",salida:"00:00"}}, 4:{mediodia:{entrada:"12:30",salida:"15:30"},noche:{entrada:"20:00",salida:"23:30"}} },
+    4: { 1:{mediodia:{entrada:"11:30",salida:"15:30"},noche:{entrada:"20:00",salida:"23:30"}}, 2:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:00",salida:"00:00"}}, 3:{mediodia:{entrada:"13:00",salida:"16:30"},noche:{entrada:"21:00",salida:"00:30"}}, 4:{mediodia:{entrada:"12:30",salida:"15:30"},noche:{entrada:"20:30",salida:"00:30"}} },
+    5: { 1:{mediodia:{entrada:"11:30",salida:"15:30"},noche:{entrada:"20:00",salida:"23:30"}}, 2:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:00",salida:"00:00"}}, 3:{mediodia:{entrada:"13:00",salida:"16:30"},noche:{entrada:"21:00",salida:"00:30"}}, 4:{mediodia:{entrada:"12:30",salida:"15:30"},noche:{entrada:"20:30",salida:"00:30"}} },
+    6: { 1:{mediodia:{entrada:"11:30",salida:"15:30"},noche:{entrada:"19:30",salida:"22:30"}}, 2:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:00",salida:"00:00"}}, 3:{mediodia:{entrada:"13:00",salida:"16:30"},noche:{entrada:"20:30",salida:"23:30"}}, 4:{mediodia:{entrada:"12:30",salida:"15:30"},noche:{entrada:"20:00",salida:"23:30"}} }
+  };
+  return h;
+};
+
+const buildCocinaHor = () => {
+  const h = {
+    0: { 101:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 104:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 105:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 106:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 107:{mediodia:{entrada:"13:00",salida:"16:00"},noche:{entrada:"20:30",salida:"23:30"}} },
+    1: { 101:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 102:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 103:{mediodia:{entrada:"12:30",salida:"16:30"},noche:{entrada:"19:30",salida:"23:30"}}, 105:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 106:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 107:{mediodia:{entrada:"13:00",salida:"16:00"},noche:{entrada:"20:30",salida:"23:30"}} },
+    2: { 101:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 102:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 103:{mediodia:{entrada:"12:30",salida:"16:30"},noche:{entrada:"19:30",salida:"23:30"}}, 104:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 105:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}} },
+    3: { 103:{mediodia:{entrada:"12:30",salida:"16:30"},noche:{entrada:"19:30",salida:"23:30"}}, 104:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 105:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 106:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 107:{mediodia:{entrada:"13:00",salida:"16:00"},noche:{entrada:"20:30",salida:"23:30"}} },
+    4: { 101:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 102:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 103:{mediodia:{entrada:"12:30",salida:"16:30"},noche:{entrada:"19:30",salida:"23:30"}}, 105:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 106:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 107:{mediodia:{entrada:"13:00",salida:"16:00"},noche:{entrada:"20:30",salida:"23:30"}} },
+    5: { 101:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 102:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 103:{mediodia:{entrada:"12:30",salida:"16:30"},noche:{entrada:"19:30",salida:"23:30"}}, 104:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 105:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 107:{mediodia:{entrada:"13:00",salida:"16:30"},noche:{entrada:"20:30",salida:"23:30"}} },
+    6: { 101:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"18:30",salida:"23:30"}}, 102:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 104:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 106:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:30",salida:"23:30"}}, 107:{mediodia:{entrada:"13:00",salida:"16:30"},noche:{entrada:"20:30",salida:"23:30"}} }
+  };
+  return h;
+};
+
+const buildCocinaAsign = () => {
+  const h = {
+    0: { mediodia:{maki:104,nigiri:101,wok:105,parrilla:106,fregaplatos:107}, noche:{fritura:104,maki:101,wok:105,parrilla:106,fregaplatos:107} },
+    1: { mediodia:{maki:101,fritura:102,wok:105,parrilla:106,fregaplatos:107}, noche:{maki:101,fritura:102,wok:105,parrilla:106,fregaplatos:107} },
+    2: { mediodia:{maki:104,nigiri:101,fritura:102,wok:105}, noche:{maki:104,nigiri:101,fritura:102,wok:105} },
+    3: { mediodia:{maki:104,wok:105,parrilla:106,fregaplatos:107}, noche:{maki:104,wok:105,parrilla:106,fregaplatos:107} },
+    4: { mediodia:{maki:101,fritura:102,wok:105,parrilla:106,fregaplatos:107}, noche:{maki:101,fritura:102,wok:105,parrilla:106,fregaplatos:107} },
+    5: { mediodia:{maki:104,nigiri:101,fritura:102,wok:105,fregaplatos:107}, noche:{maki:104,nigiri:101,fritura:102,wok:105,fregaplatos:107} },
+    6: { mediodia:{maki:104,nigiri:101,fritura:102,parrilla:106,fregaplatos:107}, noche:{maki:104,nigiri:101,fritura:102,parrilla:106,fregaplatos:107} }
+  };
+  return h;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════
+function Avatar({nombre,color,size=32}){
+  return <div style={{width:size,height:size,borderRadius:"50%",flexShrink:0,
+    background:color+"28",border:`2px solid ${color}`,display:"flex",
+    alignItems:"center",justifyContent:"center",fontSize:size*.38,fontWeight:900,color}}>{nombre[0]}</div>;
+}
+function Tag({label,color,emoji}){
+  return <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:"2px 8px",
+    borderRadius:7,fontSize:10,fontWeight:800,background:color+"20",color,whiteSpace:"nowrap"}}>
+    {emoji&&<span>{emoji}</span>}{label}</span>;
+}
+function TimeChip({time,color}){
+  return <span style={{background:color+"18",color,fontWeight:800,fontSize:12,
+    padding:"2px 8px",borderRadius:7,letterSpacing:"0.2px"}}>{time}</span>;
+}
+function Overlay({children,onClose,center=false}){
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"#00000080",zIndex:300,
+    display:"flex",alignItems:center?"center":"flex-end",justifyContent:"center",padding:16}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",
+      borderRadius:center?"20px":"20px 20px 0 0",padding:"24px 20px 32px",
+      width:"100%",maxWidth:500,boxShadow:"0 20px 60px #0006",maxHeight:"90vh",overflowY:"auto"}}>
+      {children}</div></div>;
+}
+function TSelect({label,value,onChange}){
+  return <div style={{textAlign:"center"}}>
+    <div style={{fontSize:10,color:"#9CA3AF",fontWeight:700,marginBottom:4}}>{label}</div>
+    <select value={value} onChange={e=>onChange(e.target.value)} style={{padding:"8px 10px",
+      borderRadius:10,border:"1.5px solid #E5E7EB",fontSize:14,fontWeight:800,cursor:"pointer",
+      outline:"none",fontFamily:"inherit",background:"#fff"}}>
+      {HORAS_SELECT.map(h=><option key={h} value={h}>{h}</option>)}
+    </select></div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// APP
+// ═══════════════════════════════════════════════════════════════
+// ── Storage helpers ───────────────────────────────────────────
+function loadStorage(key, fallback){
+  try {
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : (typeof fallback === "function" ? fallback() : fallback);
+  } catch(e){ return typeof fallback === "function" ? fallback() : fallback; }
+}
+function saveStorage(key, val){
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch(e){}
+}
+
+function App({onExtras}){
+  const [area,setArea]   = useState("salon");
+  const [vista,setVista] = useState("semana");
+  const [diaIdx,setDia]  = useState(0);
+  const [guardado,setGuardado] = useState(false); // feedback visual
+
+  const [salonEmps,setSalonEmps]   = useState(()=>loadStorage("salonEmps", SALON_EMP_INIT));
+  const [salonHor,setSalonHor]     = useState(()=>loadStorage("salonHor",  buildSalonHor));
+  const [editTurno,setEditTurno]   = useState(null);
+  const [nuevoSalon,setNuevoSalon] = useState(false);
+  const [formSalon,setFormSalon]   = useState({nombre:"",disponible:[0,1,2,3,4,5,6]});
+
+  const [cocinaEmps,setCocinaEmps]       = useState(()=>loadStorage("cocinaEmps",  COCINA_EMP_INIT));
+  const [cocinaAsign,setCocinaAsign]     = useState(()=>loadStorage("cocinaAsign", buildCocinaAsign));
+  const [cocinaHor,setCocinaHor]         = useState(()=>loadStorage("cocinaHor",   buildCocinaHor));
+  const [editPuesto,setEditPuesto]       = useState(null);
+  const [editCocinaHor,setEditCocinaHor] = useState(null);
+  const [editDescanso,setEditDescanso]   = useState(null);
+
+  // ── Auto-save on every change ─────────────────────────────────
+  useEffect(()=>{ saveStorage("salonEmps",  salonEmps);  },[salonEmps]);
+  useEffect(()=>{ saveStorage("salonHor",   salonHor);   },[salonHor]);
+  useEffect(()=>{ saveStorage("cocinaEmps", cocinaEmps); },[cocinaEmps]);
+  useEffect(()=>{ saveStorage("cocinaAsign",cocinaAsign);},[cocinaAsign]);
+  useEffect(()=>{ saveStorage("cocinaHor",  cocinaHor);  },[cocinaHor]);
+
+  // ── Reset a datos originales ──────────────────────────────────
+  const resetTodo = () => {
+    if(!window.confirm("¿Resetear todo a los datos originales?")) return;
+    ["salonEmps","salonHor","cocinaEmps","cocinaAsign","cocinaHor"].forEach(k=>localStorage.removeItem(k));
+    setSalonEmps(SALON_EMP_INIT);
+    setSalonHor(buildSalonHor());
+    setCocinaEmps(COCINA_EMP_INIT);
+    setCocinaAsign(buildCocinaAsign());
+    setCocinaHor(buildCocinaHor());
+  };
+
+  // ── Feedback guardado ─────────────────────────────────────────
+  const showGuardado = useCallback(()=>{
+    setGuardado(true);
+    setTimeout(()=>setGuardado(false), 1800);
+  },[]);
+
+  const ac = AREA_COLOR[area];
+
+  // Toggle día libre cocinero (máx 2 días libres, Karina no tiene límite igual que salón)
+  const toggleLibreCocina = (empId, di) => {
+    setCocinaEmps(prev => prev.map(emp => {
+      if (emp.id !== empId) return emp;
+      const libres = DIAS.map((_,i)=>i).filter(i=>!emp.disponible.includes(i));
+      const estaLibre = !emp.disponible.includes(di);
+      if (estaLibre) {
+        // quitar día libre → añadir a disponible
+        return {...emp, disponible:[...emp.disponible, di].sort((a,b)=>a-b)};
+      } else {
+        // añadir día libre — máx 2 para cocineros (no Karina)
+        if (emp.puestoPrincipal !== "fregaplatos" && libres.length >= 2) return emp;
+        return {...emp, disponible: emp.disponible.filter(x=>x!==di)};
+      }
+    }));
+  };
+
+  // ── helpers salón ──────────────────────────────────────────────
+  const getSalon = (empId,servId,di=diaIdx) => (salonHor[di]||{})[empId]?.[servId]||null;
+  const setSalon = (empId,servId,data,di=diaIdx) => {
+    setSalonHor(prev=>{
+      const d={...(prev[di]||{})},e={...(d[empId]||{})};
+      if(data===null) delete e[servId]; else e[servId]=data;
+      if(!Object.keys(e).length) delete d[empId]; else d[empId]=e;
+      return {...prev,[di]:d};
+    });
+    showGuardado();
+  };
+  const salonHrsTotal = empId => {
+    let h=0;
+    DIAS.forEach((_,di)=>{
+      Object.entries((salonHor[di]||{})[empId]||{}).forEach(([sId,t])=>{h+=calcHrs(t.entrada,t.salida,sId);});
+    });
+    return h;
+  };
+
+  // ── helpers cocina ─────────────────────────────────────────────
+  const getAsign = (servId,pId,di=diaIdx) => (cocinaAsign[di]||{})[servId]?.[pId]||null;
+  const getCHor  = (empId,servId,di=diaIdx) => (cocinaHor[di]||{})[empId]?.[servId]||null;
+  const setAsign = (servId,pId,empId) => {
+    setCocinaAsign(prev=>{
+      const d={...(prev[diaIdx]||{})},s={...(d[servId]||{})};
+      if(empId===null) delete s[pId]; else s[pId]=empId;
+      d[servId]=s; return {...prev,[diaIdx]:d};
+    });
+    showGuardado();
+  };
+  const setCHor = (empId,servId,data) => {
+    setCocinaHor(prev=>{
+      const d={...(prev[diaIdx]||{})},e={...(d[empId]||{})};
+      if(data===null) delete e[servId]; else e[servId]=data;
+      d[empId]=e; return {...prev,[diaIdx]:d};
+    });
+    showGuardado();
+  };
+  const cocinaHrsTotal = empId => {
+    let h=0;
+    DIAS.forEach((_,di)=>{
+      Object.entries((cocinaHor[di]||{})[empId]||{}).forEach(([sId,t])=>{h+=calcHrs(t.entrada,t.salida,sId);});
+    });
+    return h;
+  };
+
+  const alertasDia = useMemo(()=>{
+    const r={};
+    SERVICIOS.forEach(s=>{
+      const asig=(cocinaAsign[diaIdx]||{})[s.id]||{};
+      const falt=PUESTOS_COCINA.filter(p=>{
+        if(!asig[p.id]) return true;
+        const emp=cocinaEmps.find(e=>e.id===asig[p.id]);
+        return emp&&!emp.disponible.includes(diaIdx);
+      });
+      if(falt.length) r[s.id]=falt;
+    });
+    return r;
+  },[cocinaAsign,cocinaEmps,diaIdx]);
+
+  const totalAlertas = useMemo(()=>
+    DIAS.reduce((tot,_,di)=>tot+SERVICIOS.reduce((a,s)=>{
+      const asig=(cocinaAsign[di]||{})[s.id]||{};
+      return a+PUESTOS_COCINA.filter(p=>{
+        if(!asig[p.id]) return true;
+        const emp=cocinaEmps.find(e=>e.id===asig[p.id]);
+        return emp&&!emp.disponible.includes(di);
+      }).length;
+    },0),0)
+  ,[cocinaAsign,cocinaEmps]);
+
+  // ── celda semana ───────────────────────────────────────────────
+  // Salón: muestra chips de turno para cada servicio en un día
+  const SalonCeldaSemana = ({emp,di})=>{
+    const disp=emp.disponible.includes(di);
+    if(!disp) return(
+      <div style={{textAlign:"center",padding:"6px 2px"}}>
+        <span style={{fontSize:11,color:"#E5E7EB",fontWeight:600}}>libre</span>
+      </div>
+    );
+    const m=getSalon(emp.id,"mediodia",di);
+    const n=getSalon(emp.id,"noche",di);
+    return(
+      <div style={{display:"flex",flexDirection:"column",gap:3,padding:"4px 2px",
+        cursor:"pointer"}} onClick={()=>{setDia(di);setVista("dia");}}>
+        {m?(
+          <div style={{background:"#F59E0B18",borderRadius:6,padding:"3px 5px",
+            border:"1px solid #F59E0B44",textAlign:"center"}}>
+            <div style={{fontSize:9,fontWeight:800,color:"#F59E0B"}}>🌮</div>
+            <div style={{fontSize:9,fontWeight:700,color:"#374151",lineHeight:1.2}}>
+              {m.entrada}<br/>{m.salida}
+            </div>
+          </div>
+        ):(
+          <div style={{background:"#F9F9F9",borderRadius:6,padding:"3px 5px",
+            border:"1px dashed #E5E7EB",textAlign:"center",cursor:"pointer"}}
+            onClick={e=>{e.stopPropagation();setDia(di);setEditTurno({empId:emp.id,servId:"mediodia"});setVista("dia");}}>
+            <div style={{fontSize:10,color:"#D1D5DB"}}>+</div>
+          </div>
+        )}
+        {n?(
+          <div style={{background:"#818CF818",borderRadius:6,padding:"3px 5px",
+            border:"1px solid #818CF844",textAlign:"center"}}>
+            <div style={{fontSize:9,fontWeight:800,color:"#818CF8"}}>🌙</div>
+            <div style={{fontSize:9,fontWeight:700,color:"#374151",lineHeight:1.2}}>
+              {n.entrada}<br/>{n.salida}
+            </div>
+          </div>
+        ):(
+          <div style={{background:"#F9F9F9",borderRadius:6,padding:"3px 5px",
+            border:"1px dashed #E5E7EB",textAlign:"center",cursor:"pointer"}}
+            onClick={e=>{e.stopPropagation();setDia(di);setEditTurno({empId:emp.id,servId:"noche"});setVista("dia");}}>
+            <div style={{fontSize:10,color:"#D1D5DB"}}>+</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Cocina: para cada día muestra mediodía y noche como chips de puestos
+  const CocinaCeldaSemana = ({emp,di})=>{
+    const disp=emp.disponible.includes(di);
+    const libres=DIAS.map((_,i)=>i).filter(i=>!emp.disponible.includes(i));
+    const puedeToggle = emp.puestoPrincipal!=="fregaplatos";
+    if(!disp) return(
+      <div style={{textAlign:"center",padding:"6px 2px",cursor:"pointer"}}
+        onClick={e=>{e.stopPropagation(); if(puedeToggle) toggleLibreCocina(emp.id,di);}}>
+        <div style={{background:"#FEF2F2",borderRadius:8,padding:"6px 4px",
+          border:"1.5px dashed #FCA5A5"}}>
+          <div style={{fontSize:12}}>🌴</div>
+          <div style={{fontSize:9,color:"#EF4444",fontWeight:800}}>libre</div>
+          {puedeToggle&&<div style={{fontSize:8,color:"#FCA5A5",marginTop:1}}>toca p/ quitar</div>}
+        </div>
+      </div>
+    );
+    return(
+      <div style={{display:"flex",flexDirection:"column",gap:3,padding:"4px 2px"}}>
+        {SERVICIOS.map(s=>{
+          const hor=getCHor(emp.id,s.id,di);
+          const puestoCubre=PUESTOS_COCINA.find(p=>(cocinaAsign[di]||{})[s.id]?.[p.id]===emp.id);
+          return(
+            <div key={s.id} onClick={()=>{setDia(di);setVista("dia");}}
+              style={{background:s.color+"15",borderRadius:6,cursor:"pointer",
+              padding:"3px 5px",border:`1px solid ${s.color}33`,textAlign:"center"}}>
+              {puestoCubre?(
+                <>
+                  <div style={{fontSize:10}}>{puestoCubre.emoji}</div>
+                  <div style={{fontSize:8,fontWeight:800,color:puestoCubre.color}}>{puestoCubre.label}</div>
+                  {hor&&<div style={{fontSize:8,color:"#9CA3AF",marginTop:1}}>{hor.entrada}→{hor.salida}</div>}
+                </>
+              ):(
+                <div style={{fontSize:9,color:s.color+"99"}}>—</div>
+              )}
+            </div>
+          );
+        })}
+        {/* Botón para poner día libre */}
+        {puedeToggle&&(
+          <div onClick={e=>{e.stopPropagation(); toggleLibreCocina(emp.id,di);}}
+            style={{textAlign:"center",cursor:"pointer",marginTop:2}}>
+            <span style={{fontSize:8,color:"#D1D5DB",fontWeight:700,
+              background:"#F9F8F6",borderRadius:4,padding:"1px 5px",
+              border:"1px dashed #E5E7EB"}}>
+              {libres.length>=2?"🔒":"🌴 libre"}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── ContratoBarra ──────────────────────────────────────────────
+  const ContratoBarra = ({asig,objetivo,nombre,color})=>{
+    const diff=+(asig-objetivo).toFixed(1);
+    const pct=Math.min((asig/objetivo)*100,100);
+    const estado=Math.abs(diff)<=0.5?"ok":diff>0?"exceso":"faltan";
+    const sc={ok:"#10B981",exceso:"#F59E0B",faltan:"#EF4444"}[estado];
+    const sl={ok:"✓",exceso:`+${diff}h`,faltan:`${diff}h`}[estado];
+    return(
+      <div style={{marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+          <Avatar nombre={nombre} color={color} size={24}/>
+          <span style={{fontWeight:700,fontSize:12,flex:1}}>{nombre}</span>
+          <span style={{fontSize:11,fontWeight:800,color:sc}}>{sl}</span>
+          <span style={{fontSize:12,fontWeight:900}}>{asig}h</span>
+          <span style={{fontSize:10,color:"#9CA3AF"}}>/{objetivo}h</span>
+        </div>
+        <div style={{background:"#F3F4F6",borderRadius:6,height:6,overflow:"hidden"}}>
+          <div style={{width:`${pct}%`,height:"100%",borderRadius:6,background:sc,transition:"width .4s"}}/>
+        </div>
+      </div>
+    );
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  return(
+    <div style={{minHeight:"100vh",background:"#F4F3F0",
+      fontFamily:"'DM Sans','Segoe UI',sans-serif",color:"#1A1A1A"}}>
+
+      {/* ── HEADER ────────────────────────────────────────────── */}
+      <div style={{background:"#111827",position:"sticky",top:0,zIndex:200,
+        boxShadow:"0 2px 24px #0007"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+          padding:"12px 20px",borderBottom:"1px solid #1F2937"}}>
+
+          {/* Logo + vista toggle */}
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:18,fontWeight:900,color:"#F9FAFB"}}>🍴 RestoPro</span>
+            <button onClick={onExtras} style={{padding:"6px 14px",borderRadius:10,
+              border:"none",cursor:"pointer",background:"#F97316",color:"#fff",
+              fontWeight:800,fontSize:12}}>⚙️ Más</button>
+            {guardado&&(
+              <span style={{fontSize:11,background:"#10B981",color:"#fff",
+                borderRadius:8,padding:"3px 10px",fontWeight:700,animation:"none"}}>
+                ✓ Guardado
+              </span>
+            )}
+            <div style={{display:"flex",background:"#1F2937",borderRadius:10,padding:3,gap:2}}>
+              {[{id:"semana",label:"📅 Semana"},{id:"dia",label:"☀️ Día"}].map(v=>(
+                <button key={v.id} onClick={()=>setVista(v.id)} style={{
+                  padding:"5px 12px",borderRadius:8,border:"none",cursor:"pointer",
+                  fontWeight:800,fontSize:11,transition:"all .15s",
+                  background:vista===v.id?ac:"transparent",
+                  color:vista===v.id?"#fff":"#6B7280",
+                }}>{v.label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Reset + Área switcher */}
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button onClick={resetTodo} title="Resetear datos" style={{
+            padding:"6px 10px",borderRadius:10,border:"1px solid #374151",
+            background:"transparent",color:"#6B7280",fontSize:11,cursor:"pointer",fontWeight:700,
+          }}>↺ Reset</button>
+          <div style={{display:"flex",gap:4,background:"#1F2937",borderRadius:14,padding:4}}>
+            {[{id:"salon",emoji:"🍽",label:"Salón"},{id:"cocina",emoji:"👨‍🍳",label:"Cocina"}].map(a=>(
+              <button key={a.id} onClick={()=>setArea(a.id)} style={{
+                padding:"8px 18px",borderRadius:10,border:"none",cursor:"pointer",
+                fontWeight:900,fontSize:13,transition:"all .2s",
+                background:area===a.id?AREA_COLOR[a.id]:"transparent",
+                color:area===a.id?"#fff":"#6B7280",
+                boxShadow:area===a.id?`0 2px 14px ${AREA_COLOR[a.id]}55`:"none",
+              }}>
+                {a.emoji} {a.label}
+                {a.id==="cocina"&&totalAlertas>0&&(
+                  <span style={{marginLeft:6,background:"#EF4444",color:"#fff",
+                    borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:900}}>
+                    {totalAlertas}</span>
+                )}
+              </button>
+            ))}
+          </div>
+          </div>
+        </div>
+
+        {/* Día selector — solo en vista día */}
+        {vista==="dia"&&(
+          <div style={{display:"flex",padding:"8px 16px",gap:5,overflowX:"auto"}}>
+            {DIAS.map((d,i)=>{
+              const haAlerta=area==="cocina"&&SERVICIOS.some(s=>{
+                const asig=(cocinaAsign[i]||{})[s.id]||{};
+                return PUESTOS_COCINA.some(p=>{
+                  if(!asig[p.id]) return true;
+                  const emp=cocinaEmps.find(e=>e.id===asig[p.id]);
+                  return emp&&!emp.disponible.includes(i);
+                });
+              });
+              return(
+                <button key={i} onClick={()=>setDia(i)} style={{
+                  padding:"7px 16px",borderRadius:16,border:"none",cursor:"pointer",
+                  fontWeight:800,fontSize:12,flexShrink:0,transition:"all .15s",
+                  background:diaIdx===i?ac:"#1F2937",
+                  color:diaIdx===i?"#fff":"#6B7280",
+                  boxShadow:diaIdx===i?`0 2px 10px ${ac}55`:"none",
+                  position:"relative",
+                }}>
+                  {d}
+                  {haAlerta&&<span style={{position:"absolute",top:-4,right:-4,
+                    background:"#EF4444",borderRadius:"50%",width:14,height:14,fontSize:9,
+                    fontWeight:900,color:"#fff",display:"flex",alignItems:"center",
+                    justifyContent:"center"}}>!</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div style={{height:3,background:`linear-gradient(90deg,${ac},${ac}55)`}}/>
+
+      {/* ═══════════════════════════════════════════════════════
+          VISTA SEMANA
+      ═══════════════════════════════════════════════════════ */}
+      {vista==="semana"&&(
+        <div style={{padding:"16px 12px",overflowX:"auto"}}>
+
+          {/* ── SALÓN semana ── */}
+          {area==="salon"&&(
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <h2 style={{margin:0,fontSize:18,fontWeight:900}}>🍽 Salón — semana completa</h2>
+                <button onClick={()=>setNuevoSalon(true)} style={{
+                  padding:"7px 16px",borderRadius:16,border:"none",cursor:"pointer",
+                  background:ac,color:"#fff",fontWeight:800,fontSize:12,
+                  boxShadow:`0 2px 10px ${ac}55`}}>+ Añadir</button>
+              </div>
+
+              {/* Tabla */}
+              <div style={{overflowX:"auto",borderRadius:16,background:"#fff",
+                boxShadow:"0 2px 12px #0002"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",minWidth:680}}>
+                  <thead>
+                    <tr style={{background:"#F9F8F6"}}>
+                      <th style={{padding:"10px 14px",textAlign:"left",fontSize:11,
+                        fontWeight:800,color:"#9CA3AF",borderBottom:"2px solid #F3F4F6",width:120}}>
+                        EMPLEADO
+                      </th>
+                      {DIAS.map((d,i)=>(
+                        <th key={i} style={{padding:"10px 8px",textAlign:"center",fontSize:11,
+                          fontWeight:800,color:i>=5?"#818CF8":"#9CA3AF",
+                          borderBottom:"2px solid #F3F4F6",
+                          background:i>=5?"#F5F3FF":"#F9F8F6"}}>
+                          {d}
+                          {i>=5&&<div style={{fontSize:8,color:"#818CF8"}}>fin de sem.</div>}
+                        </th>
+                      ))}
+                      <th style={{padding:"10px 8px",textAlign:"center",fontSize:11,
+                        fontWeight:800,color:"#9CA3AF",borderBottom:"2px solid #F3F4F6"}}>
+                        HRS
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salonEmps.map((emp,ri)=>{
+                      const color=SALON_COLOR[emp.puesto]||"#2563EB";
+                      const hrs=salonHrsTotal(emp.id);
+                      const obj=contratoHrs("salon");
+                      const diff=+(hrs-obj).toFixed(1);
+                      const hrsColor=Math.abs(diff)<=0.5?"#10B981":diff>0?"#F59E0B":"#EF4444";
+                      return(
+                        <tr key={emp.id} style={{borderBottom:ri<salonEmps.length-1?"1px solid #F3F4F6":undefined}}>
+                          <td style={{padding:"8px 14px"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <Avatar nombre={emp.nombre} color={color} size={28}/>
+                              <span style={{fontWeight:700,fontSize:13}}>{emp.nombre}</span>
+                            </div>
+                          </td>
+                          {DIAS.map((_,di)=>(
+                            <td key={di} style={{padding:"4px 3px",verticalAlign:"top",
+                              background:di>=5?"#FAFAFA":undefined}}>
+                              <SalonCeldaSemana emp={emp} di={di}/>
+                            </td>
+                          ))}
+                          <td style={{padding:"8px",textAlign:"center"}}>
+                            <div style={{fontWeight:900,fontSize:16,color:hrsColor}}>{hrs}</div>
+                            <div style={{fontSize:9,color:"#9CA3AF"}}>/{obj}h</div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Leyenda */}
+              <div style={{display:"flex",gap:12,marginTop:12,flexWrap:"wrap"}}>
+                {SERVICIOS.map(s=>(
+                  <div key={s.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"#6B7280"}}>
+                    <div style={{width:8,height:8,borderRadius:2,background:s.color}}/>
+                    <b>{s.emoji} {s.label}</b> {s.rango}
+                  </div>
+                ))}
+                <div style={{fontSize:11,color:"#9CA3AF",marginLeft:"auto",fontStyle:"italic"}}>
+                  Toca una celda para editar · ☕ Descanso 12:00–12:30 descontado
+                </div>
+              </div>
+
+              {/* Contrato semana */}
+              <div style={{marginTop:16,background:"#fff",borderRadius:16,padding:18,
+                boxShadow:"0 1px 8px #0001"}}>
+                <div style={{fontSize:13,fontWeight:800,marginBottom:14,color:"#374151"}}>
+                  📋 Horas contratadas
+                </div>
+                {salonEmps.map(emp=>(
+                  <ContratoBarra key={emp.id} nombre={emp.nombre} asig={salonHrsTotal(emp.id)}
+                    objetivo={contratoHrs("salon")} color={SALON_COLOR[emp.puesto]||"#2563EB"}/>
+                ))}
+                <div style={{fontSize:11,color:"#9CA3AF",marginTop:8}}>
+                  Contrato: 4×6.5h + 2×7h = <b style={{color:"#374151"}}>{CONTRATO_SALON.totalH}h/semana</b>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── COCINA semana ── */}
+          {area==="cocina"&&(
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <h2 style={{margin:0,fontSize:18,fontWeight:900}}>👨‍🍳 Cocina — semana completa</h2>
+              </div>
+
+              <div style={{overflowX:"auto",borderRadius:16,background:"#fff",
+                boxShadow:"0 2px 12px #0002"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}>
+                  <thead>
+                    <tr style={{background:"#F9F8F6"}}>
+                      <th style={{padding:"10px 14px",textAlign:"left",fontSize:11,
+                        fontWeight:800,color:"#9CA3AF",borderBottom:"2px solid #F3F4F6",width:140}}>
+                        COCINERO
+                      </th>
+                      {DIAS.map((d,i)=>(
+                        <th key={i} style={{padding:"10px 8px",textAlign:"center",fontSize:11,
+                          fontWeight:800,color:i>=5?"#818CF8":"#9CA3AF",
+                          borderBottom:"2px solid #F3F4F6",
+                          background:i>=5?"#F5F3FF":"#F9F8F6"}}>
+                          {d}
+                          {i>=5&&<div style={{fontSize:8,color:"#818CF8"}}>fin de sem.</div>}
+                        </th>
+                      ))}
+                      <th style={{padding:"10px 8px",textAlign:"center",fontSize:11,
+                        fontWeight:800,color:"#9CA3AF",borderBottom:"2px solid #F3F4F6"}}>HRS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cocinaEmps.map((emp,ri)=>{
+                      const p=PUESTOS_COCINA.find(x=>x.id===emp.puestoPrincipal);
+                      const color=p?.color||"#64748B";
+                      const hrs=cocinaHrsTotal(emp.id);
+                      const obj=contratoHrs(emp.contrato);
+                      const diff=+(hrs-obj).toFixed(1);
+                      const hrsColor=Math.abs(diff)<=0.5?"#10B981":diff>0?"#F59E0B":"#EF4444";
+                      return(
+                        <tr key={emp.id} style={{borderBottom:ri<cocinaEmps.length-1?"1px solid #F3F4F6":undefined}}>
+                          <td style={{padding:"8px 14px"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <Avatar nombre={emp.nombre} color={color} size={28}/>
+                              <div>
+                                <div style={{fontWeight:700,fontSize:13}}>{emp.nombre}</div>
+                                <Tag label={p?.label||""} color={color} emoji={p?.emoji}/>
+                              </div>
+                            </div>
+                          </td>
+                          {DIAS.map((_,di)=>{
+                            const haAlerta=SERVICIOS.some(s=>{
+                              const asig=(cocinaAsign[di]||{})[s.id]||{};
+                              return Object.values(asig).includes(emp.id)&&!emp.disponible.includes(di);
+                            });
+                            return(
+                              <td key={di} style={{padding:"4px 3px",verticalAlign:"top",
+                                background:di>=5?"#FAFAFA":undefined,
+                                position:"relative"}}>
+                                {haAlerta&&<div style={{position:"absolute",top:2,right:2,
+                                  background:"#EF4444",color:"#fff",borderRadius:"50%",
+                                  width:12,height:12,fontSize:8,fontWeight:900,
+                                  display:"flex",alignItems:"center",justifyContent:"center",zIndex:1}}>!</div>}
+                                <CocinaCeldaSemana emp={emp} di={di}/>
+                              </td>
+                            );
+                          })}
+                          <td style={{padding:"8px",textAlign:"center"}}>
+                            <div style={{fontWeight:900,fontSize:16,color:hrsColor}}>{hrs}</div>
+                            <div style={{fontSize:9,color:"#9CA3AF"}}>/{obj}h</div>
+                            {emp.puestoPrincipal!=="fregaplatos"&&(()=>{
+                              const libres=DIAS.map((_,i)=>i).filter(i=>!emp.disponible.includes(i));
+                              return <div style={{marginTop:4,display:"flex",gap:2,justifyContent:"center",flexWrap:"wrap"}}>
+                                {DIAS.map((_,i)=>(
+                                  <div key={i} style={{width:7,height:7,borderRadius:"50%",
+                                    background:!emp.disponible.includes(i)?"#EF4444":"#E5E7EB"}}/>
+                                ))}
+                              </div>;
+                            })()}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Leyenda días libres */}
+              <div style={{display:"flex",alignItems:"center",gap:8,marginTop:10,
+                background:"#FEF2F2",borderRadius:10,padding:"8px 14px",
+                border:"1px solid #FCA5A5"}}>
+                <span style={{fontSize:14}}>🌴</span>
+                <span style={{fontSize:12,color:"#DC2626",fontWeight:700}}>
+                  Días libres (cocineros: máx 2/semana)
+                </span>
+                <span style={{fontSize:11,color:"#9CA3AF"}}>
+                  · Toca 🌴 en la celda para marcar/quitar · Puntos rojos = día libre
+                </span>
+              </div>
+
+              {/* Leyenda puestos */}
+              <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+                {PUESTOS_COCINA.map(p=>(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#6B7280"}}>
+                    <span>{p.emoji}</span><b style={{color:p.color}}>{p.label}</b>
+                  </div>
+                ))}
+                <div style={{fontSize:11,color:"#9CA3AF",marginLeft:"auto",fontStyle:"italic"}}>
+                  Toca para editar
+                </div>
+              </div>
+
+              {/* Contrato semana cocina */}
+              <div style={{marginTop:16,background:"#fff",borderRadius:16,padding:18,
+                boxShadow:"0 1px 8px #0001"}}>
+                <div style={{fontSize:13,fontWeight:800,marginBottom:14,color:"#374151"}}>
+                  📋 Horas contratadas
+                </div>
+                {cocinaEmps.map(emp=>{
+                  const p=PUESTOS_COCINA.find(x=>x.id===emp.puestoPrincipal);
+                  return <ContratoBarra key={emp.id} nombre={emp.nombre}
+                    asig={cocinaHrsTotal(emp.id)} objetivo={contratoHrs(emp.contrato)}
+                    color={p?.color||"#64748B"}/>;
+                })}
+                <div style={{fontSize:11,color:"#9CA3AF",marginTop:8}}>
+                  Cocineros: 5×8h = <b style={{color:"#374151"}}>{CONTRATO_COCINA.totalH}h/sem</b>
+                  {" · "}Karina: 4×6.5h+2×7h = <b style={{color:"#374151"}}>{CONTRATO_SALON.totalH}h/sem</b>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
+          VISTA DÍA — igual que antes
+      ═══════════════════════════════════════════════════════ */}
+      {vista==="dia"&&area==="salon"&&(
+        <div style={{maxWidth:860,margin:"0 auto",padding:"20px 16px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <div>
+              <h2 style={{margin:0,fontSize:20,fontWeight:900}}>🍽 Salón — {DIAS_FULL[diaIdx]}</h2>
+              <p style={{margin:"4px 0 0",fontSize:12,color:"#9CA3AF"}}>
+                Toca un bloque para asignar · ☕ Descanso 12:00–12:30 descontado
+              </p>
+            </div>
+            <button onClick={()=>setNuevoSalon(true)} style={{
+              padding:"9px 18px",borderRadius:20,border:"none",cursor:"pointer",
+              background:ac,color:"#fff",fontWeight:900,fontSize:13,
+              boxShadow:`0 3px 12px ${ac}55`}}>+ Añadir</button>
+          </div>
+
+          <div style={{display:"flex",gap:10,marginBottom:16}}>
+            {SERVICIOS.map(s=>(
+              <div key={s.id} style={{display:"flex",alignItems:"center",gap:7,
+                background:"#fff",borderRadius:12,padding:"8px 16px",
+                border:`1.5px solid ${s.color}33`,boxShadow:"0 1px 4px #0001"}}>
+                <span style={{fontSize:16}}>{s.emoji}</span>
+                <span style={{fontWeight:900,color:s.color}}>{s.label}</span>
+                <span style={{fontSize:11,color:"#9CA3AF"}}>{s.rango}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {salonEmps.map(emp=>{
+              const disp=emp.disponible.includes(diaIdx);
+              const color=SALON_COLOR[emp.puesto]||"#2563EB";
+              return(
+                <div key={emp.id} style={{background:"#fff",borderRadius:16,overflow:"hidden",
+                  boxShadow:"0 1px 8px #0001",borderLeft:`4px solid ${color}`,opacity:disp?1:0.45}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,
+                    padding:"12px 16px",borderBottom:"1px solid #F3F4F6"}}>
+                    <Avatar nombre={emp.nombre} color={color} size={38}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:900,fontSize:15}}>{emp.nombre}</div>
+                      {!disp&&<span style={{fontSize:11,color:"#EF4444",fontWeight:700}}>No disponible</span>}
+                    </div>
+                    <div style={{fontWeight:900,fontSize:17,color:ac}}>{salonHrsTotal(emp.id)}h</div>
+                    <button onClick={()=>setSalonEmps(p=>p.filter(e=>e.id!==emp.id))}
+                      style={{background:"#FEF2F2",border:"none",borderRadius:8,
+                        padding:"6px 8px",cursor:"pointer",color:"#EF4444",fontSize:13}}>🗑</button>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
+                    {SERVICIOS.map((s,si)=>{
+                      const t=getSalon(emp.id,s.id);
+                      const hrs=t?calcHrs(t.entrada,t.salida,s.id):null;
+                      return(
+                        <div key={s.id}
+                          onClick={()=>disp&&setEditTurno({empId:emp.id,servId:s.id})}
+                          style={{padding:"14px 16px",borderRight:si===0?"1px solid #F3F4F6":undefined,
+                            cursor:disp?"pointer":"default",background:t?s.color+"0D":"transparent",
+                            transition:"background .15s",minHeight:72}}
+                          onMouseEnter={e=>{if(disp)e.currentTarget.style.background=s.color+"1A"}}
+                          onMouseLeave={e=>{e.currentTarget.style.background=t?s.color+"0D":"transparent"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}>
+                            <span style={{fontSize:14}}>{s.emoji}</span>
+                            <span style={{fontSize:11,fontWeight:800,color:s.color}}>{s.label}</span>
+                            {hrs!==null&&<span style={{fontSize:11,color:"#9CA3AF",marginLeft:"auto"}}>
+                              {hrs}h{s.id==="mediodia"&&<span style={{fontSize:9,color:"#FCA5A5"}}> -½</span>}
+                            </span>}
+                          </div>
+                          {t?(
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <TimeChip time={t.entrada} color={s.color}/>
+                              <span style={{color:"#D1D5DB",fontSize:12}}>→</span>
+                              <TimeChip time={t.salida}  color={s.color}/>
+                            </div>
+                          ):(
+                            <div style={{fontSize:12,color:"#D1D5DB",fontWeight:600}}>
+                              {disp?"+ Asignar turno":"—"}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {vista==="dia"&&area==="cocina"&&(
+        <div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+          <div style={{marginBottom:16}}>
+            <h2 style={{margin:0,fontSize:20,fontWeight:900}}>👨‍🍳 Cocina — {DIAS_FULL[diaIdx]}</h2>
+            <p style={{margin:"4px 0 0",fontSize:12,color:"#9CA3AF"}}>
+              Todos salen 16:00 · Uno de Maki/Nigiri se queda hasta 16:30 · ☕ Descanso 12:00–12:30
+            </p>
+          </div>
+
+          {Object.keys(alertasDia).length>0&&(
+            <div style={{background:"#FEF2F2",borderRadius:14,padding:"12px 16px",
+              marginBottom:16,border:"1.5px solid #FCA5A5"}}>
+              <div style={{fontWeight:900,fontSize:13,color:"#DC2626",marginBottom:6}}>⚠️ Puestos sin cubrir</div>
+              {SERVICIOS.map(s=>{
+                const falt=alertasDia[s.id];
+                if(!falt?.length) return null;
+                return <div key={s.id} style={{fontSize:12,color:"#EF4444",marginBottom:2}}>
+                  <b>{s.emoji} {s.label}:</b> {falt.map(p=>p.label).join(", ")}</div>;
+              })}
+            </div>
+          )}
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:24}}>
+            {SERVICIOS.map(s=>(
+              <div key={s.id} style={{background:"#fff",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 8px #0001"}}>
+                <div style={{background:s.color+"15",borderBottom:`1px solid ${s.color}22`,
+                  padding:"12px 16px",display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:20}}>{s.emoji}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:900,fontSize:14,color:s.color}}>{s.label}</div>
+                    <div style={{fontSize:11,color:"#9CA3AF"}}>{s.rango}</div>
+                  </div>
+                </div>
+                <div style={{padding:"6px 0"}}>
+                  {PUESTOS_COCINA.map(p=>{
+                    const empId=getAsign(s.id,p.id);
+                    const emp=cocinaEmps.find(e=>e.id===empId);
+                    const noDisp=emp&&!emp.disponible.includes(diaIdx);
+                    const quedaTarde=emp&&getCHor(emp.id,s.id)?.salida==="16:30"&&s.id==="mediodia";
+                    return(
+                      <div key={p.id} onClick={()=>setEditPuesto({servId:s.id,puestoId:p.id})}
+                        style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",
+                          cursor:"pointer",borderLeft:`3px solid ${emp&&!noDisp?p.color:"#FCA5A5"}`,
+                          marginLeft:8,marginBottom:4,borderRadius:"0 10px 10px 0",
+                          background:emp&&!noDisp?p.color+"0A":"#FEF2F2",transition:"background .15s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background=p.color+"1A"}
+                        onMouseLeave={e=>e.currentTarget.style.background=emp&&!noDisp?p.color+"0A":"#FEF2F2"}>
+                        <span style={{fontSize:17,width:24,textAlign:"center"}}>{p.emoji}</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:800,fontSize:12,color:p.color}}>{p.label}</div>
+                          {emp?(
+                            <div style={{fontSize:11,color:noDisp?"#EF4444":"#374151"}}>
+                              {emp.nombre}
+                              {noDisp&&<span style={{fontSize:10,color:"#EF4444",marginLeft:4,fontWeight:800}}>⚠️ día libre</span>}
+                              {!noDisp&&emp.puestoPrincipal!==p.id&&<span style={{fontSize:10,color:"#F59E0B",marginLeft:4,fontWeight:700}}>↔ rot.</span>}
+                              {!noDisp&&quedaTarde&&<span style={{fontSize:10,color:"#10B981",marginLeft:4,fontWeight:700}}>→ 16:30</span>}
+                            </div>
+                          ):(
+                            <div style={{fontSize:11,color:"#EF4444",fontWeight:700}}>Sin cubrir ⚠️</div>
+                          )}
+                        </div>
+                        {emp&&<Avatar nombre={emp.nombre} color={noDisp?"#EF4444":p.color} size={26}/>}
+                        <span style={{fontSize:10,color:"#D1D5DB"}}>✎</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <h3 style={{fontSize:15,fontWeight:900,marginBottom:12}}>Horario del equipo</h3>
+          <div style={{display:"flex",flexDirection:"column",gap:9}}>
+            {cocinaEmps.map(emp=>{
+              const p=PUESTOS_COCINA.find(x=>x.id===emp.puestoPrincipal);
+              const color=p?.color||"#64748B";
+              const disp=emp.disponible.includes(diaIdx);
+              const cubre=SERVICIOS.flatMap(s=>
+                PUESTOS_COCINA.filter(px=>(cocinaAsign[diaIdx]||{})[s.id]?.[px.id]===emp.id)
+                  .map(px=>({...px,servId:s.id,sColor:s.color,sEmoji:s.emoji}))
+              );
+              return(
+                <div key={emp.id} style={{background:"#fff",borderRadius:16,overflow:"hidden",
+                  boxShadow:"0 1px 8px #0001",borderLeft:`4px solid ${color}`,opacity:disp?1:0.45}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,
+                    padding:"12px 16px",borderBottom:"1px solid #F3F4F6"}}>
+                    <Avatar nombre={emp.nombre} color={color} size={38}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:900,fontSize:15}}>{emp.nombre}</div>
+                      <div style={{display:"flex",gap:5,marginTop:4,flexWrap:"wrap"}}>
+                        <Tag label={p?.label||emp.puestoPrincipal} color={color} emoji={p?.emoji}/>
+                        {emp.puestosExtra.map(px=>(
+                          <Tag key={px} label={pLabel(px)} color={pColor(px)} emoji={pEmoji(px)}/>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{fontWeight:900,fontSize:17,color:ac}}>{cocinaHrsTotal(emp.id)}h</div>
+                    <button onClick={()=>setCocinaEmps(prev=>prev.filter(e=>e.id!==emp.id))}
+                      style={{background:"#FEF2F2",border:"none",borderRadius:8,
+                        padding:"6px 8px",cursor:"pointer",color:"#EF4444",fontSize:13}}>🗑</button>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
+                    {SERVICIOS.map((s,si)=>{
+                      const hor=getCHor(emp.id,s.id);
+                      const hrs=hor?calcHrs(hor.entrada,hor.salida,s.id):null;
+                      const cubreS=cubre.filter(c=>c.servId===s.id);
+                      const quedaTarde=hor&&s.id==="mediodia"&&hor.salida==="16:30";
+                      return(
+                        <div key={s.id} style={{padding:"12px 16px",minHeight:76,
+                          borderRight:si===0?"1px solid #F3F4F6":undefined}}>
+                          <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}>
+                            <span style={{fontSize:13}}>{s.emoji}</span>
+                            <span style={{fontSize:11,fontWeight:800,color:s.color}}>{s.label}</span>
+                            {quedaTarde&&<span style={{fontSize:10,background:"#D1FAE5",color:"#065F46",
+                              borderRadius:6,padding:"1px 6px",fontWeight:700,marginLeft:4}}>→ 16:30</span>}
+                          </div>
+                          {hor?(
+                            <div onClick={()=>disp&&setEditCocinaHor({empId:emp.id,servId:s.id})}
+                              style={{display:"flex",alignItems:"center",gap:5,marginBottom:8,cursor:disp?"pointer":"default"}}>
+                              <TimeChip time={hor.entrada} color={s.color}/>
+                              <span style={{color:"#D1D5DB",fontSize:11}}>→</span>
+                              <TimeChip time={hor.salida}  color={s.color}/>
+                              {hrs!==null&&<span style={{fontSize:10,color:"#9CA3AF"}}>{hrs}h</span>}
+                            </div>
+                          ):(
+                            <div onClick={()=>disp&&setEditCocinaHor({empId:emp.id,servId:s.id})}
+                              style={{fontSize:11,color:"#D1D5DB",marginBottom:8,cursor:disp?"pointer":"default",fontWeight:600}}>
+                              {disp?"+ Horario":"—"}
+                            </div>
+                          )}
+                          {cubreS.length>0?(
+                            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                              {cubreS.map(c=><Tag key={c.id} label={c.label} color={c.color} emoji={c.emoji}/>)}
+                            </div>
+                          ):(
+                            <div style={{fontSize:10,color:"#E5E7EB"}}>Sin puesto</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ MODALES ════════════════════════════════════════════ */}
+
+      {/* Editar turno salón */}
+      {editTurno&&(()=>{
+        const emp=salonEmps.find(e=>e.id===editTurno.empId);
+        const s=SERVICIOS.find(x=>x.id===editTurno.servId);
+        const di=vista==="semana"?diaIdx:diaIdx;
+        const cur=getSalon(editTurno.empId,editTurno.servId,di);
+        return(
+          <Overlay onClose={()=>setEditTurno(null)}>
+            <div style={{textAlign:"center",marginBottom:16}}>
+              <div style={{fontSize:26}}>{s.emoji}</div>
+              <div style={{fontWeight:900,fontSize:17}}>{s.label} · {emp?.nombre}</div>
+              <div style={{fontSize:12,color:"#9CA3AF"}}>{DIAS_FULL[di]}</div>
+            </div>
+            {s.id==="mediodia"&&(
+              <div style={{background:"#FEF9C3",borderRadius:10,padding:"8px 14px",
+                marginBottom:14,fontSize:12,color:"#92400E",fontWeight:700,textAlign:"center"}}>
+                ☕ Descanso 12:00–12:30 se descuenta automáticamente
+              </div>
+            )}
+            <div style={{fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:8}}>TURNOS HABITUALES</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+              {TURNOS_RAPIDOS[editTurno.servId].map(t=>{
+                const sel=cur?.entrada===t.entrada&&cur?.salida===t.salida;
+                const hrs=calcHrs(t.entrada,t.salida,editTurno.servId);
+                return(
+                  <button key={t.entrada+t.salida}
+                    onClick={()=>setSalon(editTurno.empId,editTurno.servId,{entrada:t.entrada,salida:t.salida},di)}
+                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                      padding:"12px 16px",borderRadius:12,border:"none",cursor:"pointer",
+                      background:sel?s.color:s.color+"12",color:sel?"#fff":s.color,
+                      fontWeight:800,fontSize:14,boxShadow:sel?`0 2px 12px ${s.color}55`:"none"}}>
+                    <span>{t.entrada} → {t.salida}</span>
+                    <span style={{fontSize:12,opacity:0.8}}>{hrs}h reales</span>
+                  </button>
+                );
+              })}
+            </div>
+            {cur&&(
+              <div style={{background:s.color+"0D",borderRadius:12,padding:14,marginBottom:14}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:10}}>AJUSTAR HORA</div>
+                <div style={{display:"flex",alignItems:"center",gap:10,justifyContent:"center"}}>
+                  <TSelect label="Entrada" value={cur.entrada}
+                    onChange={v=>setSalon(editTurno.empId,editTurno.servId,{...cur,entrada:v},di)}/>
+                  <span style={{fontSize:18,color:"#9CA3AF"}}>→</span>
+                  <TSelect label="Salida" value={cur.salida}
+                    onChange={v=>setSalon(editTurno.empId,editTurno.servId,{...cur,salida:v},di)}/>
+                </div>
+                <div style={{textAlign:"center",marginTop:8,fontSize:13,color:s.color,fontWeight:700}}>
+                  {calcHrs(cur.entrada,cur.salida,editTurno.servId)}h reales
+                </div>
+              </div>
+            )}
+            <div style={{display:"flex",gap:10}}>
+              {cur&&<button onClick={()=>{setSalon(editTurno.empId,editTurno.servId,null,di);setEditTurno(null);}}
+                style={{flex:1,padding:12,borderRadius:12,border:"2px solid #FCA5A5",
+                  background:"#FEF2F2",color:"#EF4444",fontWeight:800,cursor:"pointer"}}>🗑 Quitar</button>}
+              <button onClick={()=>setEditTurno(null)} style={{flex:2,padding:12,borderRadius:12,border:"none",
+                background:s.color,color:"#fff",fontWeight:900,cursor:"pointer",fontSize:14}}>Listo</button>
+            </div>
+          </Overlay>
+        );
+      })()}
+
+      {/* Asignar puesto cocina */}
+      {editPuesto&&(()=>{
+        const s=SERVICIOS.find(x=>x.id===editPuesto.servId);
+        const p=PUESTOS_COCINA.find(x=>x.id===editPuesto.puestoId);
+        const curId=getAsign(editPuesto.servId,editPuesto.puestoId);
+        const aptos=cocinaEmps.filter(e=>e.disponible.includes(diaIdx)&&
+          (e.puestoPrincipal===p.id||e.puestosExtra.includes(p.id)));
+        const otros=cocinaEmps.filter(e=>e.disponible.includes(diaIdx)&&
+          !aptos.find(a=>a.id===e.id)&&e.puestoPrincipal!=="fregaplatos");
+        const noDisponibles=cocinaEmps.filter(e=>!e.disponible.includes(diaIdx)&&
+          (e.puestoPrincipal===p.id||e.puestosExtra.includes(p.id)));
+        return(
+          <Overlay onClose={()=>setEditPuesto(null)} center>
+            <div style={{textAlign:"center",marginBottom:16}}>
+              <div style={{fontSize:32}}>{p.emoji}</div>
+              <div style={{fontWeight:900,fontSize:17,color:p.color}}>{p.label}</div>
+              <div style={{fontSize:12,color:"#9CA3AF"}}>{s.emoji} {s.label} · {DIAS_FULL[diaIdx]}</div>
+            </div>
+            {aptos.length>0&&<>
+              <div style={{fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:8}}>PUEDEN CUBRIR</div>
+              <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:14}}>
+                {aptos.map(emp=>{
+                  const sel=emp.id===curId;
+                  return(
+                    <button key={emp.id}
+                      onClick={()=>{setAsign(editPuesto.servId,editPuesto.puestoId,emp.id);setEditPuesto(null);}}
+                      style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",
+                        borderRadius:12,border:"none",cursor:"pointer",textAlign:"left",
+                        background:sel?p.color:"#F4F3F0",color:sel?"#fff":"#1A1A1A",
+                        boxShadow:sel?`0 2px 12px ${p.color}55`:"none"}}>
+                      <Avatar nombre={emp.nombre} color={sel?"#fff":p.color} size={34}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:800}}>{emp.nombre}</div>
+                        <div style={{fontSize:11,opacity:0.7}}>{emp.puestoPrincipal===p.id?"Puesto principal":"↔ Rotación"}</div>
+                      </div>
+                      {sel&&<span>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </>}
+            {otros.length>0&&<>
+              <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",marginBottom:8}}>OTROS DISPONIBLES</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
+                {otros.map(emp=>(
+                  <button key={emp.id}
+                    onClick={()=>{setAsign(editPuesto.servId,editPuesto.puestoId,emp.id);setEditPuesto(null);}}
+                    style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",
+                      borderRadius:12,border:"1.5px dashed #E5E7EB",cursor:"pointer",
+                      background:"transparent",textAlign:"left"}}>
+                    <Avatar nombre={emp.nombre} color={pColor(emp.puestoPrincipal)} size={30}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:700,fontSize:13}}>{emp.nombre}</div>
+                      <div style={{fontSize:10,color:"#9CA3AF"}}>{pEmoji(emp.puestoPrincipal)} {pLabel(emp.puestoPrincipal)} · fuera de especialidad</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>}
+            {noDisponibles.length>0&&<>
+              <div style={{fontSize:11,fontWeight:700,color:"#EF4444",marginBottom:8}}>DÍA LIBRE</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
+                {noDisponibles.map(emp=>(
+                  <div key={emp.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",
+                    borderRadius:12,background:"#FEF2F2",border:"1px solid #FCA5A5",opacity:0.7}}>
+                    <Avatar nombre={emp.nombre} color="#EF4444" size={30}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:700,fontSize:13,color:"#EF4444"}}>{emp.nombre}</div>
+                      <div style={{fontSize:10,color:"#EF4444"}}>🚫 Día libre hoy</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>}
+            {curId&&<button onClick={()=>{setAsign(editPuesto.servId,editPuesto.puestoId,null);setEditPuesto(null);}}
+              style={{width:"100%",padding:11,borderRadius:12,border:"2px solid #FCA5A5",
+                background:"#FEF2F2",color:"#EF4444",fontWeight:800,cursor:"pointer",marginBottom:8}}>🗑 Dejar vacío</button>}
+            <button onClick={()=>setEditPuesto(null)} style={{width:"100%",padding:11,borderRadius:12,
+              border:"1.5px solid #E5E7EB",background:"#fff",color:"#6B7280",fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+          </Overlay>
+        );
+      })()}
+
+      {/* Horario cocinero */}
+      {editCocinaHor&&(()=>{
+        const emp=cocinaEmps.find(e=>e.id===editCocinaHor.empId);
+        const s=SERVICIOS.find(x=>x.id===editCocinaHor.servId);
+        const cur=getCHor(editCocinaHor.empId,editCocinaHor.servId);
+        const esMakiNigiri=["maki","nigiri"].includes(emp.puestoPrincipal)||
+          emp.puestosExtra.some(x=>["maki","nigiri"].includes(x));
+        return(
+          <Overlay onClose={()=>setEditCocinaHor(null)}>
+            <div style={{textAlign:"center",marginBottom:16}}>
+              <div style={{fontSize:24}}>{s.emoji}</div>
+              <div style={{fontWeight:900,fontSize:17}}>{s.label} · {emp?.nombre}</div>
+              <div style={{fontSize:12,color:"#9CA3AF"}}>{DIAS_FULL[diaIdx]}</div>
+            </div>
+            <div style={{fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:8}}>TURNOS RÁPIDOS</div>
+            <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:14}}>
+              {TURNOS_RAPIDOS[editCocinaHor.servId]
+                .filter(t=>editCocinaHor.servId!=="mediodia"||(t.salida!=="16:30"||esMakiNigiri))
+                .map(t=>{
+                  const sel=cur?.entrada===t.entrada&&cur?.salida===t.salida;
+                  const hrs=calcHrs(t.entrada,t.salida,editCocinaHor.servId);
+                  return(
+                    <button key={t.entrada+t.salida}
+                      onClick={()=>setCHor(editCocinaHor.empId,editCocinaHor.servId,{entrada:t.entrada,salida:t.salida})}
+                      style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                        padding:"11px 16px",borderRadius:12,border:"none",cursor:"pointer",
+                        background:sel?s.color:s.color+"12",color:sel?"#fff":s.color,
+                        fontWeight:800,fontSize:14,boxShadow:sel?`0 2px 12px ${s.color}55`:"none"}}>
+                      <span>{t.entrada} → {t.salida}</span>
+                      <span style={{fontSize:12,opacity:0.8}}>{hrs}h reales</span>
+                    </button>
+                  );
+                })}
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              {cur&&<button onClick={()=>{setCHor(editCocinaHor.empId,editCocinaHor.servId,null);setEditCocinaHor(null);}}
+                style={{flex:1,padding:12,borderRadius:12,border:"2px solid #FCA5A5",
+                  background:"#FEF2F2",color:"#EF4444",fontWeight:800,cursor:"pointer"}}>🗑 Quitar</button>}
+              <button onClick={()=>setEditCocinaHor(null)} style={{flex:2,padding:12,borderRadius:12,border:"none",
+                background:s.color,color:"#fff",fontWeight:900,cursor:"pointer"}}>Listo</button>
+            </div>
+          </Overlay>
+        );
+      })()}
+
+      {/* Nuevo empleado salón */}
+      {nuevoSalon&&(
+        <Overlay onClose={()=>setNuevoSalon(false)} center>
+          <div style={{fontWeight:900,fontSize:17,marginBottom:18}}>🍽 Añadir al salón</div>
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:5}}>Nombre</div>
+            <input value={formSalon.nombre} placeholder="Nombre"
+              onChange={e=>setFormSalon(p=>({...p,nombre:e.target.value}))}
+              style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1.5px solid #E5E7EB",
+                fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+          </div>
+          <div style={{marginBottom:18}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:8}}>Disponibilidad</div>
+            <div style={{display:"flex",gap:5}}>
+              {DIAS.map((d,i)=>(
+                <button key={i} onClick={()=>setFormSalon(f=>{
+                  const da=f.disponible.includes(i)?f.disponible.filter(x=>x!==i):[...f.disponible,i];
+                  return {...f,disponible:da};
+                })} style={{flex:1,padding:"8px 2px",borderRadius:10,border:"none",cursor:"pointer",
+                  background:formSalon.disponible.includes(i)?"#DCFCE7":"#F3F4F6",
+                  color:formSalon.disponible.includes(i)?"#15803D":"#9CA3AF",fontWeight:800,fontSize:11}}>
+                  {d}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={()=>setNuevoSalon(false)} style={{flex:1,padding:12,borderRadius:12,
+              border:"1.5px solid #E5E7EB",background:"#fff",color:"#6B7280",fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+            <button onClick={()=>{
+              if(!formSalon.nombre.trim()) return;
+              setSalonEmps(p=>[...p,{...formSalon,id:Date.now(),puesto:"Mesero",contrato:"salon"}]);
+              setFormSalon({nombre:"",disponible:[0,1,2,3,4,5,6]});
+              setNuevoSalon(false);
+            }} style={{flex:2,padding:12,borderRadius:12,border:"none",
+              background:ac,color:"#fff",fontWeight:900,cursor:"pointer"}}>Añadir</button>
+          </div>
+        </Overlay>
+      )}
+    </div>
+  );
+}
+
+
+function FullApp(){
+  const [mainTab,setMainTab]=React.useState("horario");
+  const [extraTab,setExtraTab]=React.useState("caja");
+
+  const [salonEmps,setSalonEmps]=React.useState(()=>{
+    try{return JSON.parse(localStorage.getItem("salonEmps")||"null")||SALON_EMP_INIT}
+    catch(e){return SALON_EMP_INIT}
+  });
+  const [cocinaEmps,setCocinaEmps]=React.useState(()=>{
+    try{return JSON.parse(localStorage.getItem("cocinaEmps")||"null")||COCINA_EMP_INIT}
+    catch(e){return COCINA_EMP_INIT}
+  });
+  const [salonHor,setSalonHor]=React.useState(()=>{
+    try{return JSON.parse(localStorage.getItem("salonHor")||"null")||buildSalonHor()}
+    catch(e){return buildSalonHor()}
+  });
+
+  React.useEffect(()=>{
+    if(mainTab==="extras"){
+      try{
+        const se=JSON.parse(localStorage.getItem("salonEmps")||"null");
+        const ce=JSON.parse(localStorage.getItem("cocinaEmps")||"null");
+        const sh=JSON.parse(localStorage.getItem("salonHor")||"null");
+        if(se)setSalonEmps(se);
+        if(ce)setCocinaEmps(ce);
+        if(sh)setSalonHor(sh);
+      }catch(e){}
+    }
+  },[mainTab]);
+
+  const sharedProps={salonEmps,cocinaEmps,salonHor,setSalonEmps,setCocinaEmps};
+
+  const renderExtra=()=>{
+    switch(extraTab){
+      case "caja":        return <ModCaja/>;
+      case "contactos":   return <ModContactos {...sharedProps}/>;
+      case "solicitudes": return <ModSolicitudes {...sharedProps}/>;
+      case "puntualidad": return <ModPuntualidad {...sharedProps}/>;
+      case "tareas":      return <ModTareas/>;
+      case "proveedores": return <ModProveedores/>;
+      default: return null;
+    }
+  };
+
+  const curTab=EXTRA_TABS.find(t=>t.id===extraTab);
+
+  if(mainTab==="horario"){
+    return <App onExtras={()=>setMainTab("extras")}/>;
+  }
+
+  return(
+    <div style={{minHeight:"100vh",background:"#F4F3F0",
+      fontFamily:"'DM Sans','Segoe UI',sans-serif"}}>
+      <div style={{background:"#111827",position:"sticky",top:0,zIndex:200,
+        boxShadow:"0 2px 24px #0007"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 20px",
+          borderBottom:"1px solid #1F2937"}}>
+          <button onClick={()=>setMainTab("horario")} style={{padding:"7px 14px",
+            borderRadius:10,border:"none",cursor:"pointer",background:"#1F2937",
+            color:"#9CA3AF",fontWeight:700,fontSize:13}}>← Horario</button>
+          <span style={{fontSize:17,fontWeight:900,color:"#F9FAFB",flex:1}}>
+            {curTab?.emoji} {curTab?.label}
+          </span>
+        </div>
+        <div style={{display:"flex",overflowX:"auto",padding:"6px 12px",gap:6}}>
+          {EXTRA_TABS.map(t=>(
+            <button key={t.id} onClick={()=>setExtraTab(t.id)} style={{
+              padding:"6px 14px",borderRadius:14,border:"none",cursor:"pointer",
+              fontWeight:700,fontSize:12,flexShrink:0,transition:"all .15s",
+              background:extraTab===t.id?"#F97316":"#1F2937",
+              color:extraTab===t.id?"#fff":"#6B7280",
+              boxShadow:extraTab===t.id?"0 2px 8px #F9731655":"none",
+            }}>{t.emoji} {t.label}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{height:3,background:"linear-gradient(90deg,#F97316,#F9731655)"}}/>
+      <div style={{maxWidth:900,margin:"0 auto",padding:"16px"}}>
+        {renderExtra()}
+      </div>
+    </div>
+  );
+}
+
+const root=ReactDOM.createRoot(document.getElementById("root"));
+root.render(<FullApp/>);
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js").catch(e=>console.log("SW",e));
+  });
+}
+</script>
+</body>
+</html>
