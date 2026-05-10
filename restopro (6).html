@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="RestoPro"/>
+  <meta name="theme-color" content="#111827"/>
+  <title>RestoPro</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+    body{background:#F4F3F0;font-family:-apple-system,'Segoe UI',sans-serif;color:#1A1A1A}
+    ::-webkit-scrollbar{display:none}
+    input,select,textarea,button{font-family:inherit}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .spin{animation:spin 0.8s linear infinite}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+
+<script>
+// ================================================================
+// RestoPro - Sin Babel, React puro
+// ================================================================
+const e = React.createElement;
+const {useState, useEffect, useMemo, useCallback, useRef} = React;
+
+// ── Datos ────────────────────────────────────────────────────────
+const DIAS = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+const DIAS_FULL = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+
+const SERVICIOS = [
+  {id:"mediodia", label:"Mediodía", rango:"11:30–16:30", color:"#F59E0B", emoji:"🌮"},
+  {id:"noche",    label:"Noche",    rango:"19:30–23:30", color:"#818CF8", emoji:"🌙"},
+];
+
+const PUESTOS_COCINA = [
+  {id:"maki",       label:"Maki",       emoji:"🍣", color:"#0891B2"},
+  {id:"nigiri",     label:"Nigiri",     emoji:"🍱", color:"#7C3AED"},
+  {id:"fritura",    label:"Fritura",    emoji:"🍤", color:"#D97706"},
+  {id:"wok",        label:"Wok",        emoji:"🥢", color:"#EA580C"},
+  {id:"parrilla",   label:"Parrilla",   emoji:"🔥", color:"#DC2626"},
+  {id:"fregaplatos",label:"Fregaplatos",emoji:"🧼", color:"#64748B"},
+];
+
+const SALON_EMPS = [
+  {id:1, nombre:"Isabel",  disponible:[0,2,3,4,5,6]},
+  {id:2, nombre:"Vanessa", disponible:[1,2,3,4,5,6]},
+  {id:3, nombre:"Edu",     disponible:[0,1,2,4,5,6]},
+  {id:4, nombre:"Felipe",  disponible:[0,1,3,4,5,6]},
+];
+
+const COCINA_EMPS = [
+  {id:101, nombre:"Hosca",     puesto:"nigiri",      libre:[2]},
+  {id:102, nombre:"Sebastián", puesto:"fritura",     libre:[0,1]},
+  {id:103, nombre:"Jeferson",  puesto:"comodin",     libre:[0]},
+  {id:104, nombre:"Newton",    puesto:"maki",        libre:[2,3]},
+  {id:105, nombre:"Junfen",    puesto:"wok",         libre:[]},
+  {id:106, nombre:"Mauricio",  puesto:"parrilla",    libre:[4,6]},
+  {id:107, nombre:"Karina",    puesto:"fregaplatos", libre:[2]},
+  {id:108, nombre:"Zhouzhou",  puesto:"fritura",     libre:[1,2,3,5,6]},
+];
+
+function loadLS(key, def){
+  try{ const v=localStorage.getItem(key); return v?JSON.parse(v):def; }
+  catch(e){ return def; }
+}
+function saveLS(key, val){
+  try{ localStorage.setItem(key, JSON.stringify(val)); } catch(e){}
+}
+
+// ── Login ────────────────────────────────────────────────────────
+function Login({onLogin}){
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [show, setShow] = useState(false);
+  const [err,  setErr]  = useState("");
+
+  const login = () => {
+    const u = user.trim().toLowerCase();
+    if(u === "karumavalencia@gmail.com" && pass === "Karuma2026."){
+      onLogin("boss");
+    } else if(u === "karumavalencia@gmail.com" && pass === "Karuma2026"){
+      onLogin("empleado");
+    } else {
+      setErr("Usuario o contraseña incorrectos");
+      setTimeout(()=>setErr(""), 2500);
+    }
+  };
+
+  return e("div", {style:{minHeight:"100vh",background:"#111827",display:"flex",
+    alignItems:"center",justifyContent:"center",padding:24}},
+    e("div", {style:{width:"100%",maxWidth:360}},
+      e("div", {style:{textAlign:"center",marginBottom:32}},
+        e("div", {style:{fontSize:52,marginBottom:12}}, "🍴"),
+        e("div", {style:{fontSize:28,fontWeight:900,color:"#F9FAFB"}}, "RestoPro"),
+        e("div", {style:{fontSize:13,color:"#6B7280",marginTop:4}}, "Gestión de restaurante")
+      ),
+      e("div", {style:{background:"#1F2937",borderRadius:20,padding:28}},
+        // Email
+        e("div", {style:{marginBottom:14}},
+          e("div", {style:{fontSize:11,fontWeight:700,color:"#9CA3AF",marginBottom:6,letterSpacing:"0.5px"}}, "USUARIO"),
+          e("input", {type:"email", value:user, placeholder:"correo@email.com",
+            onChange:ev=>setUser(ev.target.value),
+            onKeyDown:ev=>ev.key==="Enter"&&login(),
+            style:{width:"100%",padding:"12px 16px",borderRadius:12,border:"1.5px solid #374151",
+              background:"#111827",color:"#F9FAFB",fontSize:14,outline:"none",boxSizing:"border-box"}})
+        ),
+        // Password
+        e("div", {style:{marginBottom:20}},
+          e("div", {style:{fontSize:11,fontWeight:700,color:"#9CA3AF",marginBottom:6,letterSpacing:"0.5px"}}, "CONTRASEÑA"),
+          e("div", {style:{position:"relative"}},
+            e("input", {type:show?"text":"password", value:pass, placeholder:"••••••••",
+              onChange:ev=>setPass(ev.target.value),
+              onKeyDown:ev=>ev.key==="Enter"&&login(),
+              style:{width:"100%",padding:"12px 48px 12px 16px",borderRadius:12,
+                border:"1.5px solid #374151",background:"#111827",color:"#F9FAFB",
+                fontSize:14,outline:"none",boxSizing:"border-box"}}),
+            e("button", {onClick:()=>setShow(!show),
+              style:{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",
+                background:"transparent",border:"none",cursor:"pointer",color:"#6B7280",fontSize:18}},
+              show?"🙈":"👁")
+          )
+        ),
+        err && e("div", {style:{background:"#FEF2F2",borderRadius:10,padding:"10px 14px",
+          marginBottom:12,color:"#EF4444",fontSize:13,fontWeight:700,textAlign:"center"}},
+          "⚠️ "+err),
+        e("button", {onClick:login,
+          style:{width:"100%",padding:14,borderRadius:12,border:"none",
+            background:"#F97316",color:"#fff",fontWeight:900,fontSize:15,cursor:"pointer"}},
+          "Entrar"),
+        e("div", {style:{textAlign:"center",marginTop:14,fontSize:11,color:"#4B5563"}},
+          "Empleados: misma cuenta, contraseña sin punto")
+      )
+    )
+  );
+}
+
+// ── Main App (Horario) ───────────────────────────────────────────
+function HorarioSalon({readonly}){
+  const initHor = () => {
+    const h={};
+    DIAS.forEach((_,i)=>{
+      h[i]={};
+      SALON_EMPS.forEach(emp=>{
+        if(!emp.disponible.includes(i)) return;
+        const turnos={};
+        // Default schedules
+        const schedules = {
+          1:{mediodia:{entrada:"11:30",salida:"15:30"},noche:{entrada:"19:30",salida:"22:30"}},
+          2:{mediodia:{entrada:"11:30",salida:"16:00"},noche:{entrada:"19:00",salida:"00:00"}},
+          3:{mediodia:{entrada:"13:00",salida:"16:30"},noche:{entrada:"20:30",salida:"23:30"}},
+          4:{mediodia:{entrada:"12:30",salida:"15:30"},noche:{entrada:"20:00",salida:"23:30"}},
+        };
+        // Friday/Saturday late
+        if(i>=4 && [1,3,4].includes(emp.id)){
+          const base = schedules[emp.id];
+          if(base){
+            turnos.mediodia = base.mediodia;
+            const late = {
+              1:{entrada:"20:00",salida:"23:30"},
+              3:{entrada:"21:00",salida:"00:30"},
+              4:{entrada:"20:30",salida:"00:30"},
+            };
+            turnos.noche = late[emp.id]||base.noche;
+          }
+        } else if(schedules[emp.id]){
+          Object.assign(turnos, schedules[emp.id]);
+        }
+        if(Object.keys(turnos).length) h[i][emp.id]=turnos;
+      });
+    });
+    return h;
+  };
+
+  const [hor, setHor] = useState(()=>loadLS("salonHor", initHor()));
+  const [diaIdx, setDia] = useState(0);
+  const [editing, setEditing] = useState(null);
+
+  useEffect(()=>saveLS("salonHor",hor),[hor]);
+
+  const toMin = t=>{const[h,m]=t.split(":").map(Number);return h*60+m;};
+  const calcHrs = (e,s,sid)=>{
+    let d=toMin(s)-toMin(e); if(d<0)d+=1440;
+    if(sid==="mediodia"){const ov=Math.min(toMin(s),toMin("12:30"))-Math.max(toMin(e),toMin("12:00"));if(ov>0)d-=ov;}
+    return +(d/60).toFixed(1);
+  };
+
+  const totalHrs = empId => {
+    let h=0;
+    DIAS.forEach((_,di)=>{
+      const t=(hor[di]||{})[empId]||{};
+      Object.entries(t).forEach(([s,v])=>{ h+=calcHrs(v.entrada,v.salida,s); });
+    });
+    return h;
+  };
+
+  const diasHrs = (empId) => {
+    const t=(hor[diaIdx]||{})[empId]||{};
+    let h=0;
+    Object.entries(t).forEach(([s,v])=>{ h+=calcHrs(v.entrada,v.salida,s); });
+    return h;
+  };
+
+  const colors = ["#2563EB","#7C3AED","#DC2626","#059669"];
+
+  return e("div", {style:{padding:16,maxWidth:900,margin:"0 auto"}},
+    // Día selector
+    e("div", {style:{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}},
+      DIAS.map((d,i)=>
+        e("button", {key:i, onClick:()=>setDia(i),
+          style:{padding:"6px 14px",borderRadius:16,border:"none",cursor:"pointer",
+            fontWeight:800,fontSize:12,
+            background:diaIdx===i?"#2563EB":"#E5E7EB",
+            color:diaIdx===i?"#fff":"#6B7280"}},
+          d)
+      )
+    ),
+    e("div", {style:{fontSize:11,color:"#9CA3AF",marginBottom:16,fontStyle:"italic"}},
+      "☕ Descanso 12:00–12:30 descontado automáticamente"),
+
+    // Empleados
+    e("div", {style:{display:"flex",flexDirection:"column",gap:10}},
+      SALON_EMPS.map((emp,idx)=>{
+        const disp = emp.disponible.includes(diaIdx);
+        const color = colors[idx%colors.length];
+        const empTurnos = (hor[diaIdx]||{})[emp.id]||{};
+        return e("div", {key:emp.id, style:{background:"#fff",borderRadius:16,
+          overflow:"hidden",boxShadow:"0 1px 8px #0001",
+          borderLeft:"4px solid "+color,opacity:disp?1:0.4}},
+          // Header
+          e("div", {style:{display:"flex",alignItems:"center",gap:12,
+            padding:"12px 16px",borderBottom:"1px solid #F3F4F6"}},
+            e("div", {style:{width:38,height:38,borderRadius:"50%",flexShrink:0,
+              background:color+"28",border:"2px solid "+color,
+              display:"flex",alignItems:"center",justifyContent:"center",
+              fontWeight:900,color,fontSize:16}}, emp.nombre[0]),
+            e("div", {style:{flex:1}},
+              e("div", {style:{fontWeight:900,fontSize:15}}, emp.nombre),
+              !disp && e("div", {style:{fontSize:11,color:"#EF4444",fontWeight:700}}, "Día libre")
+            ),
+            e("div", {style:{textAlign:"right"}},
+              e("div", {style:{fontWeight:900,fontSize:17,color:"#2563EB"}}, totalHrs(emp.id)+"h"),
+              e("div", {style:{fontSize:9,color:"#9CA3AF"}}, "esta semana")
+            )
+          ),
+          // Servicios
+          e("div", {style:{display:"grid",gridTemplateColumns:"1fr 1fr"}},
+            SERVICIOS.map((s,si)=>{
+              const t = empTurnos[s.id];
+              const hrs = t?calcHrs(t.entrada,t.salida,s.id):null;
+              return e("div", {key:s.id,
+                onClick:()=>disp&&!readonly&&setEditing({empId:emp.id,servId:s.id}),
+                style:{padding:"12px 16px",
+                  borderRight:si===0?"1px solid #F3F4F6":"none",
+                  cursor:disp&&!readonly?"pointer":"default",
+                  background:t?s.color+"0D":"transparent",minHeight:70}},
+                e("div", {style:{display:"flex",alignItems:"center",gap:5,marginBottom:6}},
+                  e("span", {style:{fontSize:14}}, s.emoji),
+                  e("span", {style:{fontSize:11,fontWeight:800,color:s.color}}, s.label),
+                  hrs!==null && e("span", {style:{fontSize:10,color:"#9CA3AF",marginLeft:"auto"}},
+                    hrs+"h"+(s.id==="mediodia"?" -½":""))
+                ),
+                t ? e("div", {style:{display:"flex",alignItems:"center",gap:6}},
+                  e("span", {style:{background:s.color+"18",color:s.color,fontWeight:800,
+                    fontSize:12,padding:"3px 8px",borderRadius:7}}, t.entrada),
+                  e("span", {style:{color:"#D1D5DB"}}, "→"),
+                  e("span", {style:{background:s.color+"18",color:s.color,fontWeight:800,
+                    fontSize:12,padding:"3px 8px",borderRadius:7}}, t.salida)
+                ) : e("div", {style:{fontSize:12,color:"#D1D5DB",fontWeight:600}},
+                  disp&&!readonly?"+ Asignar":"—")
+              );
+            })
+          )
+        );
+      })
+    ),
+
+    // Modal editar turno
+    editing && e("div", {
+      onClick:()=>setEditing(null),
+      style:{position:"fixed",inset:0,background:"#00000077",zIndex:300,
+        display:"flex",alignItems:"flex-end",justifyContent:"center",padding:16}},
+      e("div", {onClick:ev=>ev.stopPropagation(),
+        style:{background:"#fff",borderRadius:"20px 20px 0 0",
+          padding:"24px 20px 32px",width:"100%",maxWidth:480}},
+        e("div", {style:{textAlign:"center",marginBottom:16}},
+          e("div", {style:{fontWeight:900,fontSize:17}},
+            (SERVICIOS.find(s=>s.id===editing.servId)||{}).label+" · "+
+            (SALON_EMPS.find(emp=>emp.id===editing.empId)||{}).nombre),
+          e("div", {style:{fontSize:12,color:"#9CA3AF"}}, DIAS_FULL[diaIdx])
+        ),
+        // Quick options
+        e("div", {style:{fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:8}}, "HORARIOS RÁPIDOS"),
+        e("div", {style:{display:"flex",flexDirection:"column",gap:8,marginBottom:14}},
+          (editing.servId==="mediodia"?[
+            ["11:30","15:30"],["11:30","16:00"],["11:30","16:30"],["13:00","16:30"]
+          ]:[
+            ["19:00","00:00"],["19:30","22:30"],["19:30","23:30"],["20:00","23:30"],["20:30","23:30"],["21:00","00:30"]
+          ]).map(([en,sa])=>{
+            const cur = ((hor[diaIdx]||{})[editing.empId]||{})[editing.servId];
+            const sel = cur&&cur.entrada===en&&cur.salida===sa;
+            const s = SERVICIOS.find(x=>x.id===editing.servId)||{};
+            const toMin2 = t=>{const[h,m]=t.split(":").map(Number);return h*60+m;};
+            let d=toMin2(sa)-toMin2(en); if(d<0)d+=1440;
+            if(editing.servId==="mediodia"){const ov=Math.min(toMin2(sa),toMin2("12:30"))-Math.max(toMin2(en),toMin2("12:00"));if(ov>0)d-=ov;}
+            const hrs=+(d/60).toFixed(1);
+            return e("button", {key:en+sa,
+              onClick:()=>{
+                setHor(prev=>{
+                  const nd={...prev};
+                  nd[diaIdx]={...nd[diaIdx]};
+                  nd[diaIdx][editing.empId]={...(nd[diaIdx][editing.empId]||{}),[editing.servId]:{entrada:en,salida:sa}};
+                  return nd;
+                });
+                setEditing(null);
+              },
+              style:{display:"flex",justifyContent:"space-between",alignItems:"center",
+                padding:"12px 16px",borderRadius:12,border:"none",cursor:"pointer",
+                background:sel?s.color:s.color+"12",color:sel?"#fff":s.color,
+                fontWeight:800,fontSize:14}},
+              e("span",null,en+" → "+sa),
+              e("span",{style:{fontSize:12,opacity:0.8}},hrs+"h")
+            );
+          })
+        ),
+        e("div", {style:{display:"flex",gap:10}},
+          ((hor[diaIdx]||{})[editing.empId]||{})[editing.servId] && e("button", {
+            onClick:()=>{
+              setHor(prev=>{
+                const nd={...prev};
+                nd[diaIdx]={...nd[diaIdx]};
+                const empT={...(nd[diaIdx][editing.empId]||{})};
+                delete empT[editing.servId];
+                nd[diaIdx][editing.empId]=empT;
+                return nd;
+              });
+              setEditing(null);
+            },
+            style:{flex:1,padding:12,borderRadius:12,border:"2px solid #FCA5A5",
+              background:"#FEF2F2",color:"#EF4444",fontWeight:800,cursor:"pointer"}},
+            "🗑 Quitar"),
+          e("button", {onClick:()=>setEditing(null),
+            style:{flex:2,padding:12,borderRadius:12,border:"none",
+              background:"#2563EB",color:"#fff",fontWeight:900,cursor:"pointer"}},
+            "Cerrar")
+        )
+      )
+    )
+  );
+}
+
+function HorarioCocina({readonly}){
+  const initAsign = () => {
+    const h={};
+    DIAS.forEach((_,i)=>{
+      const avail = COCINA_EMPS.filter(e=>!e.libre.includes(i)).map(e=>e.id);
+      h[i]={
+        mediodia:buildAsign(avail,i),
+        noche:buildAsign(avail,i),
+      };
+    });
+    return h;
+  };
+
+  function buildAsign(avail,di){
+    const principals={101:"nigiri",102:"fritura",103:"comodin",104:"maki",
+      105:"wok",106:"parrilla",107:"fregaplatos",108:"fritura"};
+    const extras={101:["maki"],102:["maki"],103:["maki","nigiri","fritura","parrilla"],
+      104:["fritura"],105:[],106:[],107:[],108:[]};
+    const r={}, used=new Set();
+    // Special: Friday Jeferson covers parrilla
+    if(di===4 && avail.includes(103)){r.parrilla=103;used.add(103);}
+    ["maki","nigiri","fritura","wok","parrilla","fregaplatos"].forEach(p=>{
+      if(r[p]) return;
+      // exclude Jeferson(103) and Zhouzhou(108) from auto
+      const candidates=avail.filter(id=>!used.has(id)&&id!==103&&id!==108);
+      let found=candidates.find(id=>principals[id]===p);
+      if(!found) found=candidates.find(id=>(extras[id]||[]).includes(p));
+      // Zhouzhou only for fritura
+      if(!found && p==="fritura" && avail.includes(108) && !used.has(108)) found=108;
+      if(found){r[p]=found;used.add(found);}
+    });
+    return r;
+  }
+
+  const [asign, setAsign] = useState(()=>loadLS("cocinaAsign",initAsign()));
+  const [diaIdx, setDia] = useState(0);
+  const [editP, setEditP] = useState(null);
+  useEffect(()=>saveLS("cocinaAsign",asign),[asign]);
+
+  const diaDia = asign[diaIdx]||{mediodia:{},noche:{}};
+
+  const alertas = {};
+  SERVICIOS.forEach(s=>{
+    const a=diaDia[s.id]||{};
+    const falt=PUESTOS_COCINA.filter(p=>{
+      if(!a[p.id]) return true;
+      const emp=COCINA_EMPS.find(e=>e.id===a[p.id]);
+      return emp&&emp.libre.includes(diaIdx);
+    });
+    if(falt.length) alertas[s.id]=falt;
+  });
+
+  return e("div", {style:{padding:16,maxWidth:900,margin:"0 auto"}},
+    e("div", {style:{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}},
+      DIAS.map((d,i)=>{
+        const haAlert=SERVICIOS.some(s=>{
+          const a=(asign[i]||{})[s.id]||{};
+          return PUESTOS_COCINA.some(p=>{
+            if(!a[p.id]) return true;
+            const emp=COCINA_EMPS.find(ex=>ex.id===a[p.id]);
+            return emp&&emp.libre.includes(i);
+          });
+        });
+        return e("div",{key:i,style:{position:"relative"}},
+          e("button",{onClick:()=>setDia(i),
+            style:{padding:"6px 14px",borderRadius:16,border:"none",cursor:"pointer",
+              fontWeight:800,fontSize:12,
+              background:diaIdx===i?"#DC2626":"#E5E7EB",
+              color:diaIdx===i?"#fff":"#6B7280"}}, d),
+          haAlert && e("div",{style:{position:"absolute",top:-4,right:-4,
+            background:"#EF4444",color:"#fff",borderRadius:"50%",
+            width:14,height:14,fontSize:9,fontWeight:900,
+            display:"flex",alignItems:"center",justifyContent:"center"}},"!")
+        );
+      })
+    ),
+
+    Object.keys(alertas).length>0 && e("div",{style:{background:"#FEF2F2",borderRadius:12,
+      padding:"10px 14px",marginBottom:14,border:"1.5px solid #FCA5A5"}},
+      e("div",{style:{fontWeight:900,color:"#DC2626",marginBottom:4}},"⚠️ Puestos sin cubrir"),
+      SERVICIOS.map(s=>alertas[s.id]&&e("div",{key:s.id,style:{fontSize:12,color:"#EF4444"}},
+        s.emoji+" "+s.label+": "+alertas[s.id].map(p=>p.label).join(", ")))
+    ),
+
+    e("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}},
+      SERVICIOS.map(s=>
+        e("div",{key:s.id,style:{background:"#fff",borderRadius:16,overflow:"hidden",
+          boxShadow:"0 1px 8px #0001"}},
+          e("div",{style:{background:s.color+"15",borderBottom:"1px solid "+s.color+"22",
+            padding:"12px 16px",display:"flex",alignItems:"center",gap:8}},
+            e("span",{style:{fontSize:18}},s.emoji),
+            e("div",{style:{flex:1}},
+              e("div",{style:{fontWeight:900,fontSize:14,color:s.color}},s.label),
+              e("div",{style:{fontSize:11,color:"#9CA3AF"}},s.rango)
+            )
+          ),
+          e("div",{style:{padding:"6px 0"}},
+            PUESTOS_COCINA.map(p=>{
+              const empId=diaDia[s.id]?.[p.id];
+              const emp=COCINA_EMPS.find(ex=>ex.id===empId);
+              const noDisp=emp&&emp.libre.includes(diaIdx);
+              const ok=emp&&!noDisp;
+              return e("div",{key:p.id,
+                onClick:()=>!readonly&&setEditP({servId:s.id,pId:p.id}),
+                style:{display:"flex",alignItems:"center",gap:8,
+                  padding:"8px 12px",cursor:readonly?"default":"pointer",
+                  borderLeft:"3px solid "+(ok?p.color:"#FCA5A5"),
+                  marginLeft:8,marginBottom:4,borderRadius:"0 10px 10px 0",
+                  background:ok?p.color+"0A":"#FEF2F2"}},
+                e("span",{style:{fontSize:16,width:22,textAlign:"center"}},p.emoji),
+                e("div",{style:{flex:1}},
+                  e("div",{style:{fontWeight:800,fontSize:12,color:p.color}},p.label),
+                  e("div",{style:{fontSize:11,color:noDisp?"#EF4444":"#374151"}},
+                    emp?(emp.nombre+(noDisp?" ⚠️ libre":"")+(emp.puesto!==p.id?" ↔":"")):"Sin cubrir ⚠️")
+                ),
+                !readonly&&e("span",{style:{fontSize:10,color:"#D1D5DB"}},"✎")
+              );
+            })
+          )
+        )
+      )
+    ),
+
+    // Equipo
+    e("div",{style:{fontWeight:900,fontSize:15,marginBottom:10}},"Equipo de cocina"),
+    e("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+      COCINA_EMPS.map(emp=>{
+        const p=PUESTOS_COCINA.find(x=>x.id===emp.puesto)||{color:"#64748B",emoji:"",label:emp.puesto};
+        const libre=emp.libre.includes(diaIdx);
+        const cubre=SERVICIOS.flatMap(s=>
+          PUESTOS_COCINA.filter(px=>(diaDia[s.id]||{})[px.id]===emp.id)
+            .map(px=>({...px,servEmoji:s.emoji,servColor:s.color}))
+        );
+        return e("div",{key:emp.id,style:{background:"#fff",borderRadius:14,
+          padding:"10px 14px",boxShadow:"0 1px 6px #0001",
+          borderLeft:"3px solid "+p.color,opacity:libre?0.4:1,
+          display:"flex",alignItems:"center",gap:10}},
+          e("div",{style:{width:36,height:36,borderRadius:"50%",
+            background:p.color+"28",border:"2px solid "+p.color,
+            display:"flex",alignItems:"center",justifyContent:"center",
+            fontWeight:900,color:p.color,fontSize:14,flexShrink:0}},emp.nombre[0]),
+          e("div",{style:{flex:1}},
+            e("div",{style:{fontWeight:800,fontSize:14}},emp.nombre),
+            e("div",{style:{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}},
+              e("span",{style:{fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:6,
+                background:p.color+"20",color:p.color}},p.emoji+" "+(p.label||emp.puesto)),
+              cubre.map(c=>e("span",{key:c.id,style:{fontSize:10,fontWeight:700,
+                padding:"2px 7px",borderRadius:6,background:c.servColor+"18",color:c.servColor}},
+                c.servEmoji+" "+c.label))
+            )
+          ),
+          libre&&e("span",{style:{fontSize:11,color:"#EF4444",fontWeight:700}},"🌴 libre")
+        );
+      })
+    ),
+
+    // Modal asignar puesto
+    editP && e("div",{onClick:()=>setEditP(null),
+      style:{position:"fixed",inset:0,background:"#00000077",zIndex:300,
+        display:"flex",alignItems:"center",justifyContent:"center",padding:16}},
+      e("div",{onClick:ev=>ev.stopPropagation(),
+        style:{background:"#fff",borderRadius:20,padding:"24px 20px 28px",
+          width:"100%",maxWidth:420,maxHeight:"80vh",overflowY:"auto"}},
+        e("div",{style:{textAlign:"center",marginBottom:14}},
+          e("div",{style:{fontSize:28}},(PUESTOS_COCINA.find(p=>p.id===editP.pId)||{}).emoji),
+          e("div",{style:{fontWeight:900,fontSize:16,color:(PUESTOS_COCINA.find(p=>p.id===editP.pId)||{}).color}},
+            (PUESTOS_COCINA.find(p=>p.id===editP.pId)||{}).label),
+          e("div",{style:{fontSize:12,color:"#9CA3AF"}},
+            (SERVICIOS.find(s=>s.id===editP.servId)||{}).emoji+" "+
+            (SERVICIOS.find(s=>s.id===editP.servId)||{}).label+" · "+DIAS_FULL[diaIdx])
+        ),
+        e("div",{style:{fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:8}},"SELECCIONAR"),
+        e("div",{style:{display:"flex",flexDirection:"column",gap:7}},
+          COCINA_EMPS.filter(emp=>!emp.libre.includes(diaIdx)).map(emp=>{
+            const p2=PUESTOS_COCINA.find(x=>x.id===emp.puesto)||{color:"#64748B"};
+            const sel=(asign[diaIdx]||{})[editP.servId]?.[editP.pId]===emp.id;
+            return e("button",{key:emp.id,
+              onClick:()=>{
+                setAsign(prev=>{
+                  const nd={...prev,[diaIdx]:{...prev[diaIdx],
+                    [editP.servId]:{...(prev[diaIdx]||{})[editP.servId],[editP.pId]:emp.id}}};
+                  return nd;
+                });
+                setEditP(null);
+              },
+              style:{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",
+                borderRadius:12,border:"none",cursor:"pointer",textAlign:"left",
+                background:sel?p2.color:"#F4F3F0",color:sel?"#fff":"#1A1A1A"}},
+              e("div",{style:{width:30,height:30,borderRadius:"50%",
+                background:(sel?"#ffffff44":p2.color+"28"),
+                border:"2px solid "+(sel?"#fff":p2.color),
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontWeight:900,color:sel?"#fff":p2.color,fontSize:12,flexShrink:0}},emp.nombre[0]),
+              e("span",{style:{fontWeight:700}},emp.nombre),
+              sel&&e("span",{style:{marginLeft:"auto"}},"✓")
+            );
+          })
+        ),
+        e("button",{onClick:()=>setEditP(null),style:{width:"100%",marginTop:12,
+          padding:11,borderRadius:12,border:"1.5px solid #E5E7EB",
+          background:"#fff",color:"#6B7280",fontWeight:700,cursor:"pointer"}},"Cerrar")
+      )
+    )
+  );
+}
+
+// ── Full App ─────────────────────────────────────────────────────
+function App({rol, onLogout}){
+  const [area, setArea] = useState("salon");
+  const readonly = rol !== "boss";
+  const ac = area==="salon"?"#2563EB":"#DC2626";
+
+  return e("div", {style:{minHeight:"100vh",background:"#F4F3F0"}},
+    // Header
+    e("div", {style:{background:"#111827",position:"sticky",top:0,zIndex:200,
+      boxShadow:"0 2px 24px #0007"}},
+      e("div", {style:{display:"flex",alignItems:"center",gap:10,
+        padding:"12px 16px",borderBottom:"1px solid #1F2937"}},
+        e("span", {style:{fontSize:18,fontWeight:900,color:"#F9FAFB",flex:1}}, "🍴 RestoPro"),
+        readonly && e("span", {style:{fontSize:11,background:"#374151",color:"#9CA3AF",
+          borderRadius:8,padding:"4px 10px",fontWeight:700}}, "👁 Solo lectura"),
+        e("button", {onClick:onLogout, title:"Cerrar sesión",
+          style:{padding:"6px 10px",borderRadius:10,border:"none",cursor:"pointer",
+            background:"#1F2937",color:"#6B7280",fontSize:14}}, "⏏")
+      ),
+      e("div", {style:{display:"flex",gap:4,padding:"8px 16px"}},
+        [{id:"salon",emoji:"🍽",label:"Salón"},{id:"cocina",emoji:"👨‍🍳",label:"Cocina"}].map(a=>
+          e("button", {key:a.id, onClick:()=>setArea(a.id),
+            style:{padding:"8px 18px",borderRadius:10,border:"none",cursor:"pointer",
+              fontWeight:900,fontSize:13,transition:"all .2s",
+              background:area===a.id?ac:"#1F2937",
+              color:area===a.id?"#fff":"#6B7280"}},
+            a.emoji+" "+a.label)
+        )
+      )
+    ),
+    e("div", {style:{height:3,background:"linear-gradient(90deg,"+ac+","+ac+"55)"}}),
+    area==="salon" ? e(HorarioSalon, {readonly}) : e(HorarioCocina, {readonly})
+  );
+}
+
+// ── Root ─────────────────────────────────────────────────────────
+function Root(){
+  const [rol, setRol] = useState(()=>{
+    try{return sessionStorage.getItem("rp_rol")||null;}catch(e){return null;}
+  });
+
+  const login = r => {
+    try{sessionStorage.setItem("rp_rol",r);}catch(e){}
+    setRol(r);
+  };
+  const logout = () => {
+    try{sessionStorage.removeItem("rp_rol");}catch(e){}
+    setRol(null);
+  };
+
+  if(!rol) return e(Login, {onLogin:login});
+  return e(App, {rol, onLogout:logout});
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(e(Root, null));
+</script>
+</body>
+</html>
